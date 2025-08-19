@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "252938266853",
+    "project_id": "italo-7726f",
+    "storage_bucket": "italo-7726f.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:252938266853:android:a344fd23f797a242178c0c",
+        "android_client_info": {
+          "package_name": "hr.unipu.android.italo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDlDLr9Z_XYtAdKSS-s1HGwh0TP34bft9A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
