@@ -15,6 +15,9 @@ import androidx.compose.ui.unit.sp
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.auth.ktx.auth
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import hr.unipu.android.italo.R
 
 @Composable
 fun SplashScreen(onFinished: () -> Unit) {
@@ -25,12 +28,16 @@ fun SplashScreen(onFinished: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF8ADCF2)), // svijetloplava kao na maketi
+            .background(Color(0xFF4BB2F9)),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            // ovdje bi išla tvoja ikona/otisak prsta; za sad tekst:
-            Text("🔆", fontSize = 56.sp)
+            Image(
+                painter = painterResource(id = R.drawable.ic_logo),
+                contentDescription = "Italo logo",
+                modifier = Modifier.size(96.dp)
+            )
+
             Spacer(Modifier.height(16.dp))
             Text("Italo", fontSize = 28.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
         }

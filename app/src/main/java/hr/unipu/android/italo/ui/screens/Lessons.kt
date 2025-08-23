@@ -13,11 +13,26 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.ExperimentalMaterial3Api
 
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LessonsScreen(courseId: Int, onOpenLesson: (String) -> Unit) {
+fun LessonsScreen(courseId: Int, onOpenLesson: (String) -> Unit, onBackToMenu: () -> Unit) {
     val lessons = Repo.getLessonsByCourse(courseId)
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("TEČAJ $courseId") },
+                navigationIcon = {
+                    IconButton(onClick = onBackToMenu) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Povratak na menu")
+                    }
+                }
+            )
+        }
+    ) { padding ->
     Column(Modifier.fillMaxSize()) {
         Text("Lekcije", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(16.dp))
         LazyVerticalGrid(
@@ -45,5 +60,6 @@ fun LessonsScreen(courseId: Int, onOpenLesson: (String) -> Unit) {
                 }
             }
         }
+    }
     }
 }

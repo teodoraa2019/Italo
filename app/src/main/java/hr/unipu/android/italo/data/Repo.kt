@@ -7,20 +7,18 @@ object Repo {
         Course(3, "Voće", "Frutta"),
     )
 
-    // Dovoljno za start (dodaj još po istom patternu)
     private val lessonsSeed = listOf(
         Lesson("Lekcija_1_1", 1, "caffè", "kava", "https://i.imgur.com/0n3D9dU.jpeg"),
         Lesson("Lekcija_1_2", 1, "tè", "čaj", "https://i.imgur.com/0l1yC0x.jpeg"),
-        Lesson("Lekcija_1_3", 1, "birra", "pivo", "https://i.imgur.com/0qMZ2fB.jpeg"),
-        Lesson("Lekcija_1_4", 1, "acqua minerale", "mineralna voda", "https://i.imgur.com/M2Y8z1h.jpeg"),
+        // ...
+    )
 
-        Lesson("Lekcija_2_1", 2, "leone", "lav", "https://i.imgur.com/g8Gd9nT.jpeg"),
-        Lesson("Lekcija_2_2", 2, "elefante", "slon", "https://i.imgur.com/1b1n6mF.jpeg"),
-        Lesson("Lekcija_2_3", 2, "zebra", "zebra", "https://i.imgur.com/GxB2j0K.jpeg"),
-
-        Lesson("Lekcija_3_1", 3, "mela", "jabuka", "https://i.imgur.com/Zyqf0mE.jpeg"),
-        Lesson("Lekcija_3_2", 3, "banana", "banana", "https://i.imgur.com/4V1Gk6R.jpeg"),
-        Lesson("Lekcija_3_3", 3, "arancia", "naranča", "https://i.imgur.com/C5c9z2W.jpeg"),
+    // ⬇️ Premjesti kvizove UNUTAR Repo
+    private val quizzesSeed = listOf(
+        Quiz(1, "Kviz 1 - osnove"),
+        Quiz(2, "Kviz 2 - brojevi"),
+        Quiz(3, "Test 1 - osnove"),
+        Quiz(4, "Test 2 - brojevi")
     )
 
     fun getCourses(): List<Course> = coursesSeed
@@ -34,4 +32,6 @@ object Repo {
         val idx = all.indexOfFirst { it.id == currentId }
         return all.getOrNull(idx + 1)
     }
+
+    fun getQuizzes(): List<Quiz> = quizzesSeed   // ✅ sad postoji Repo.getQuizzes()
 }

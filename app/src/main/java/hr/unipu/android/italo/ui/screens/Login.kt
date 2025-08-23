@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.auth.ktx.auth
+import androidx.compose.material3.ExperimentalMaterial3Api
 
 @Composable
 fun LoginScreen(
@@ -59,3 +60,18 @@ fun LoginScreen(
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LoginRequiredScreen(onGoToLogin: () -> Unit, onBack: () -> Unit) {
+    Scaffold(topBar = { TopAppBar(title = { Text("Potrebna prijava") }) }) { p ->
+        Column(Modifier.padding(p).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Za pristup lekcijama potrebno je prijaviti se.")
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(onClick = onGoToLogin) { Text("Prijava") }
+                OutlinedButton(onClick = onBack) { Text("Natrag") }
+            }
+        }
+    }
+}
+
