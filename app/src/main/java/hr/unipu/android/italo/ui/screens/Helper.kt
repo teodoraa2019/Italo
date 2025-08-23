@@ -60,12 +60,19 @@ fun AssistiveError(msg: String) {
     }
 }
 
-fun Throwable?.fbMsg(): String = when ((this as? FirebaseAuthException)?.errorCode) {
-    "ERROR_EMAIL_ALREADY_IN_USE" -> "E-mail je već registriran."
-    "ERROR_INVALID_EMAIL"        -> "Neispravna e-mail adresa."
-    "ERROR_WEAK_PASSWORD"        -> "Lozinka mora imati najmanje 6 znakova."
-    "ERROR_USER_NOT_FOUND"       -> "Korisnik ne postoji."
-    "ERROR_WRONG_PASSWORD"       -> "Pogrešna lozinka."
-    "ERROR_TOO_MANY_REQUESTS"    -> "Previše pokušaja. Pokušaj kasnije."
-    else -> this?.localizedMessage ?: "Došlo je do pogreške."
+fun Throwable?.fbMsg(): String {
+    val code = (this as? FirebaseAuthException)?.errorCode ?: return "Došlo je do pogreške. Pokušaj ponovno."
+    return when (code) {
+        "ERROR_EMAIL_ALREADY_IN_USE" -> "E-mail je već registriran."
+        "ERROR_INVALID_EMAIL"        -> "Neispravna e-mail adresa."
+        "ERROR_WEAK_PASSWORD"        -> "Lozinka mora imati najmanje 6 znakova."
+        "ERROR_USER_NOT_FOUND"       -> "Korisnik ne postoji."
+        "ERROR_WRONG_PASSWORD"       -> "Pogrešna lozinka."
+        "ERROR_USER_DISABLED"        -> "Račun je onemogućen."
+        "ERROR_OPERATION_NOT_ALLOWED"-> "Prijava nije dopuštena."
+        "ERROR_INVALID_CREDENTIAL"   -> "Prijavni podaci su neispravni."
+        "ERROR_NETWORK_REQUEST_FAILED"-> "Provjeri internet vezu."
+        "ERROR_TOO_MANY_REQUESTS"    -> "Previše pokušaja. Pokušaj kasnije."
+        else -> "Neuspjela prijava. Pokušaj ponovno."
+    }
 }

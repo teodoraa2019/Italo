@@ -36,15 +36,13 @@ fun LoginScreen(
             Spacer(Modifier.height(16.dp))
             Button(
                 onClick = {
-                    error = if (email.isBlank() || pass.isBlank()) "Unesi e-mail i lozinku." else null
+                    error = if (email.isBlank() || pass.isBlank()) "Unesite e-mail i lozinku." else null
                     if (error == null) {
                         loading = true
-                        auth.signInWithEmailAndPassword(email, pass)
-                            .addOnCompleteListener { t ->
-                                loading = false
-                                if (t.isSuccessful) onLoginSuccess()
-                                else error = t.exception.fbMsg()
-                            }
+                        auth.signInWithEmailAndPassword(email.trim(), pass)
+                            .addOnSuccessListener { onLoginSuccess() }
+                            .addOnFailureListener { ex -> error = ex.fbMsg() }
+                            .addOnCompleteListener { loading = false }
                     }
                 },
                 enabled = !loading,

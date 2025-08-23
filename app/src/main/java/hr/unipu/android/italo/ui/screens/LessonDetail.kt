@@ -17,64 +17,124 @@ import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.ExperimentalMaterial3Api
 
-@OptIn(ExperimentalMaterial3Api::class)
+//@OptIn(ExperimentalMaterial3Api::class)
+//@Composable
+//fun LessonDetailScreen(
+//    lessonId: String,
+//    onNext: (String) -> Unit,
+//    onBackToList: () -> Unit,
+//    onOpenLesson: (String) -> Unit  // NOVO
+//) {
+//    val lesson = Repo.getLesson(lessonId) ?: run {
+//        AssistiveError("Lekcija nije pronađena"); return
+//    }
+//
+//    // Kolekcija svih lekcija u ovom tečaju + indexi
+//    val all = remember(lesson.courseId) { Repo.getLessonsByCourse(lesson.courseId) }
+//    val curIndex = all.indexOfFirst { it.id == lessonId }
+//    val prev = all.getOrNull(curIndex - 1)
+//    val next = all.getOrNull(curIndex + 1)
+//
+//    Scaffold(
+//        topBar = {
+//            TopAppBar(
+//                title = { Text("POVRATAK NA MENU") },
+//                navigationIcon = {
+//                    IconButton(onClick = onBackToList) {
+//                        Icon(Icons.Default.ArrowBack, contentDescription = "Natrag")
+//                    }
+//                }
+//            )
+//        }
+//    ) { padding ->
+//        Column(
+//            Modifier.fillMaxSize().padding(padding).padding(20.dp),
+//            horizontalAlignment = Alignment.CenterHorizontally,
+//            verticalArrangement = Arrangement.spacedBy(16.dp)
+//        ) {
+//            // --- sadržaj lekcije (kao kod tebe) ---
+//            AsyncImage(
+//                model = ImageRequest.Builder(LocalContext.current).data(lesson.imageUrl).build(),
+//                contentDescription = lesson.it,
+//                modifier = Modifier.size(180.dp).clip(MaterialTheme.shapes.extraLarge)
+//            )
+//            Text(lesson.hr, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+//            Text(lesson.it, style = MaterialTheme.typography.headlineMedium)
+//
+//            Spacer(Modifier.weight(1f))
+//
+//            // --- paginacija: ◀ 1 2 3 ... ▶ ---
+//            Row(
+//                Modifier.fillMaxWidth(),
+//                horizontalArrangement = Arrangement.Center,
+//                verticalAlignment = Alignment.CenterVertically
+//            ) {
+//                IconButton(enabled = prev != null, onClick = { prev?.let { onOpenLesson(it.id) } }) {
+//                    Icon(Icons.Default.ChevronLeft, contentDescription = "Prethodna")
+//                }
+//
+//                // brojevi (ograniči na 10-12 ako želiš)
+//                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+//                    all.forEachIndexed { i, l ->
+//                        val selected = i == curIndex
+//                        AssistChip(
+//                            onClick = { onOpenLesson(l.id) },
+//                            label = { Text("${i + 1}") },
+//                            colors = AssistChipDefaults.assistChipColors(
+//                                containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
+//                                else MaterialTheme.colorScheme.surfaceVariant
+//                            )
+//                        )
+//                    }
+//                }
+//
+//                IconButton(enabled = next != null, onClick = { next?.let { onOpenLesson(it.id) } }) {
+//                    Icon(Icons.Default.ChevronRight, contentDescription = "Sljedeća")
+//                }
+//            }
+//        }
+//    }
+//}
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LessonDetailScreen(
+    courseId: String,
     lessonId: String,
-    onNext: (String) -> Unit,
     onBackToList: () -> Unit,
-    onOpenLesson: (String) -> Unit  // NOVO
+    onOpenLesson: (String) -> Unit
 ) {
-    val lesson = Repo.getLesson(lessonId) ?: run {
+    val vm: LessonsVM = androidx.lifecycle.viewmodel.compose.viewModel(factory = LessonsVM.factory(courseId))
+    val lesson = vm.items.firstOrNull { it.id == lessonId } ?: run {
         AssistiveError("Lekcija nije pronađena"); return
     }
-
-    // Kolekcija svih lekcija u ovom tečaju + indexi
-    val all = remember(lesson.courseId) { Repo.getLessonsByCourse(lesson.courseId) }
+    val all = vm.items
     val curIndex = all.indexOfFirst { it.id == lessonId }
     val prev = all.getOrNull(curIndex - 1)
     val next = all.getOrNull(curIndex + 1)
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("POVRATAK NA MENU") },
-                navigationIcon = {
-                    IconButton(onClick = onBackToList) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Natrag")
-                    }
-                }
-            )
-        }
-    ) { padding ->
-        Column(
-            Modifier.fillMaxSize().padding(padding).padding(20.dp),
+    Scaffold(topBar = {
+        TopAppBar(title = { Text("POVRATAK NA MENU") },
+            navigationIcon = { IconButton(onClick = onBackToList) { Icon(Icons.Default.ArrowBack, null) } })
+    }) { padding ->
+        Column(Modifier.fillMaxSize().padding(padding).padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // --- sadržaj lekcije (kao kod tebe) ---
+            verticalArrangement = Arrangement.spacedBy(16.dp)) {
+
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current).data(lesson.imageUrl).build(),
-                contentDescription = lesson.it,
+                contentDescription = lesson.title,
                 modifier = Modifier.size(180.dp).clip(MaterialTheme.shapes.extraLarge)
             )
-            Text(lesson.hr, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-            Text(lesson.it, style = MaterialTheme.typography.headlineMedium)
+            Text(lesson.content, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+            Text(lesson.title, style = MaterialTheme.typography.headlineMedium)
 
             Spacer(Modifier.weight(1f))
 
-            // --- paginacija: ◀ 1 2 3 ... ▶ ---
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                 IconButton(enabled = prev != null, onClick = { prev?.let { onOpenLesson(it.id) } }) {
                     Icon(Icons.Default.ChevronLeft, contentDescription = "Prethodna")
                 }
-
-                // brojevi (ograniči na 10-12 ako želiš)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     all.forEachIndexed { i, l ->
                         val selected = i == curIndex
@@ -88,21 +148,10 @@ fun LessonDetailScreen(
                         )
                     }
                 }
-
                 IconButton(enabled = next != null, onClick = { next?.let { onOpenLesson(it.id) } }) {
                     Icon(Icons.Default.ChevronRight, contentDescription = "Sljedeća")
                 }
             }
-
-            // Dodatno: dva gumba ako želiš ostaviti i stari bottom
-//            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-//                OutlinedButton(onClick = onBackToList, modifier = Modifier.weight(1f)) { Text("Natrag") }
-//                Button(
-//                    onClick = { next?.let { onOpenLesson(it.id) } },
-//                    modifier = Modifier.weight(1f),
-//                    enabled = next != null
-//                ) { Text(if (next != null) "Sljedeća" else "Kraj tečaja") }
-//            }
         }
     }
 }

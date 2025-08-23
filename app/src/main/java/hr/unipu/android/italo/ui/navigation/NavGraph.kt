@@ -7,6 +7,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import hr.unipu.android.italo.ui.screens.*
 import com.google.firebase.auth.FirebaseAuth
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 
 sealed class Route(val path: String) {
     data object Splash : Route("splash")
@@ -16,13 +18,12 @@ sealed class Route(val path: String) {
     data object Dashboard : Route("dashboard")   // HUB nakon login/registracije
     data object Courses : Route("courses")
     data object Lessons : Route("lessons/{courseId}")
-    data object Lesson  : Route("lesson/{lessonId}")
+    data object Lesson  : Route("lesson/{courseId}/{lessonId}")
     data object Profile : Route("profile")
     data object Faq : Route("faq")
     data object Dictionary : Route("dictionary")
     data object Menu : Route("menu")
 }
-
 @Composable
 fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
     NavHost(navController = nav, startDestination = Route.Splash.path) {
@@ -48,16 +49,12 @@ fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
 
         composable(Route.Menu.path) {
             MenuScreen(
-                onOpenCourse = { id -> nav.navigate("lessons/$id") },
-                onOpenQuiz = { id -> nav.navigate("quiz/$id") },
+                onOpenCourse = { id /* Int */ -> nav.navigate("lessons/$id") },
+                onOpenQuiz   = { id /* Int */ -> nav.navigate("quiz/$id") },
                 onOpenProfile = { nav.navigate(Route.Profile.path) },
-                onLogout = {
-                    FirebaseAuth.getInstance().signOut()
-                    nav.navigate(Route.Login.path) { popUpTo(0) }
-                }
+                onLogout = { FirebaseAuth.getInstance().signOut(); nav.navigate(Route.Login.path){ popUpTo(0) } }
             )
         }
-
 
         composable(Route.Dashboard.path) {
             DashboardScreen(
@@ -70,12 +67,11 @@ fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
         composable(Route.Info.path) {
             InfoScreen(
                 onBack = { nav.popBackStack() },
-                onFaq = { nav.navigate(Route.Faq.path) }
+                onFaq  = { nav.navigate(Route.Faq.path) }
             )
         }
 
-
-        // Lekcije
+        // Tečajevi
         composable(Route.Courses.path) {
             val user = FirebaseAuth.getInstance().currentUser
             if (user == null) {
@@ -84,37 +80,45 @@ fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
                     onBack = { nav.popBackStack() }
                 )
             } else {
-                CoursesScreen(onOpenCourse = { id -> nav.navigate("lessons/$id") })
+                CoursesScreen(onOpenCourse = { id: String -> nav.navigate("lessons/$id") })
             }
         }
 
-        composable(Route.Lessons.path) { back ->
-            val courseId = back.arguments?.getString("courseId")?.toInt() ?: 1
+        composable(
+            route = Route.Lessons.path,
+            arguments = listOf(navArgument("courseId"){ type = NavType.StringType })
+        ) { back ->
+            val courseId = back.arguments?.getString("courseId") ?: return@composable
             LessonsScreen(
                 courseId = courseId,
-                onOpenLesson = { lessonId -> nav.navigate("lesson/$lessonId") },
+                onOpenLesson = { lessonId: String -> nav.navigate("lesson/$courseId/$lessonId") },
                 onBackToMenu = { nav.navigate(Route.Menu.path) { popUpTo(0) } }
             )
         }
-        composable(Route.Lesson.path) { back ->
-            val lessonId = back.arguments?.getString("lessonId")!!
+
+// Lesson detail
+        composable(
+            route = Route.Lesson.path,
+            arguments = listOf(
+                navArgument("courseId"){ type = NavType.StringType },
+                navArgument("lessonId"){ type = NavType.StringType }
+            )
+        ) { back ->
+            val courseId = back.arguments?.getString("courseId") ?: return@composable
+            val lessonId = back.arguments?.getString("lessonId") ?: return@composable
             LessonDetailScreen(
+                courseId = courseId,
                 lessonId = lessonId,
-                onNext = { nextId ->
-                    nav.navigate("lesson/$nextId") {
-                        popUpTo("lesson/$lessonId") { inclusive = true }
-                    }
-                },
                 onBackToList = { nav.popBackStack() },
-                onOpenLesson = { id ->
-                    nav.navigate("lesson/$id") {
-                        popUpTo("lesson/$lessonId") { inclusive = true }
+                onOpenLesson = { id: String ->
+                    nav.navigate("lesson/$courseId/$id") {
+                        popUpTo("lesson/$courseId/$lessonId") { inclusive = true }
                     }
                 }
             )
         }
 
-        // Profil i setup
+        // Profil
         composable(Route.Profile.path) {
             ProfileScreen(
                 onBack = { nav.navigate(Route.Menu.path) },
@@ -127,6 +131,6 @@ fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
 
         // Rječnik i ČPP
         composable(Route.Dictionary.path) { DictionaryScreen(onBack = { nav.popBackStack() }) }
-        composable(Route.Faq.path) { FaqScreen(onBack = { nav.popBackStack() }) }
+        composable(Route.Faq.path)        { FaqScreen(onBack = { nav.popBackStack() }) }
     }
 }
