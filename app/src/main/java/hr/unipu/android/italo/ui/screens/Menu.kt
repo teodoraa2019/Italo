@@ -18,11 +18,11 @@ import androidx.compose.ui.unit.dp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MenuScreen(
-    onOpenCourse: (String) -> Unit,   // ⇐ String docId iz Firestorea
+    onOpenCourse: (String) -> Unit,
     onOpenQuiz: (Int) -> Unit,
     onOpenProfile: () -> Unit,
     onLogout: () -> Unit,
-    vm: CoursesVM = viewModel()       // ⇐ Firestore VM
+    vm: CoursesVM = viewModel()
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("TEČAJEVI", "PROVJERE ZNANJA")

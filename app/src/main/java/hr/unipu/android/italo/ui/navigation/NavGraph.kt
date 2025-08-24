@@ -15,15 +15,15 @@ sealed class Route(val path: String) {
     data object Info : Route("Info")
     data object Register : Route("register")
     data object Login : Route("login")
-    data object Dashboard : Route("dashboard")   // HUB nakon login/registracije
+    data object Dashboard : Route("dashboard")
     data object Courses : Route("courses")
-    data object Lessons : Route("lessons/{courseId}")
-    data object Lesson  : Route("lesson/{courseId}/{lessonId}")
+    data object LessonGroups : Route("course/{courseId}/groups")
     data object Profile : Route("profile")
     data object Faq : Route("faq")
     data object Dictionary : Route("dictionary")
     data object Menu : Route("menu")
 }
+
 @Composable
 fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
     NavHost(navController = nav, startDestination = Route.Splash.path) {
@@ -49,7 +49,9 @@ fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
 
         composable(Route.Menu.path) {
             MenuScreen(
-                onOpenCourse = { id /* Int */ -> nav.navigate("lessons/$id") },
+                onOpenCourse = { courseId ->
+                    nav.navigate("course/$courseId/groups")
+                },
                 onOpenQuiz   = { id /* Int */ -> nav.navigate("quiz/$id") },
                 onOpenProfile = { nav.navigate(Route.Profile.path) },
                 onLogout = { FirebaseAuth.getInstance().signOut(); nav.navigate(Route.Login.path){ popUpTo(0) } }
@@ -84,35 +86,61 @@ fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
             }
         }
 
-        composable(
-            route = Route.Lessons.path,
-            arguments = listOf(navArgument("courseId"){ type = NavType.StringType })
-        ) { back ->
-            val courseId = back.arguments?.getString("courseId") ?: return@composable
-            LessonsScreen(
+        composable(Route.LessonGroups.path) { backStack ->
+            val courseId = backStack.arguments?.getString("courseId")!!
+            LessonGroupsScreen(
                 courseId = courseId,
-                onOpenLesson = { lessonId: String -> nav.navigate("lesson/$courseId/$lessonId") },
-                onBackToMenu = { nav.navigate(Route.Menu.path) { popUpTo(0) } }
+                onOpenGroup = { groupId ->
+                    nav.navigate("lessons/$courseId/$groupId")
+                },
+                onBack = { nav.popBackStack() }
             )
         }
 
-// Lesson detail
+        // GRUPE
+        composable("course/{courseId}/groups") { backStack ->
+            val courseId = backStack.arguments?.getString("courseId")!!
+            LessonGroupsScreen(
+                courseId = courseId,
+                onOpenGroup = { groupId -> nav.navigate("lessons/$courseId/$groupId") },
+                onBack = { nav.popBackStack() }
+            )
+        }
+
+        // LEKCIJE
+        composable("lessons/{courseId}/{groupId}") { backStack ->
+            val courseId = backStack.arguments?.getString("courseId")!!
+            val groupId  = backStack.arguments?.getString("groupId")!!
+            LessonsScreen(
+                courseId = courseId,
+                groupId  = groupId,
+                onOpenLesson = { lessonId ->
+                    nav.navigate("lesson/$courseId/$groupId/$lessonId")
+                },
+                onBackToMenu = { nav.popBackStack() }
+            )
+        }
+
+        // DETALJ LEKCIJE
         composable(
-            route = Route.Lesson.path,
+            route = "lesson/{courseId}/{groupId}/{lessonId}",
             arguments = listOf(
                 navArgument("courseId"){ type = NavType.StringType },
+                navArgument("groupId"){  type = NavType.StringType },
                 navArgument("lessonId"){ type = NavType.StringType }
             )
         ) { back ->
-            val courseId = back.arguments?.getString("courseId") ?: return@composable
-            val lessonId = back.arguments?.getString("lessonId") ?: return@composable
+            val courseId = back.arguments?.getString("courseId")!!
+            val groupId  = back.arguments?.getString("groupId")!!
+            val lessonId = back.arguments?.getString("lessonId")!!
             LessonDetailScreen(
                 courseId = courseId,
+                groupId  = groupId,
                 lessonId = lessonId,
                 onBackToList = { nav.popBackStack() },
-                onOpenLesson = { id: String ->
-                    nav.navigate("lesson/$courseId/$id") {
-                        popUpTo("lesson/$courseId/$lessonId") { inclusive = true }
+                onOpenLesson = { id ->
+                    nav.navigate("lesson/$courseId/$groupId/$id") {
+                        popUpTo("lesson/$courseId/$groupId/$lessonId") { inclusive = true }
                     }
                 }
             )

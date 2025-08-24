@@ -16,10 +16,8 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 
-// --- Model ---
 data class Word(val id: String = "", val it: String = "", val hr: String = "")
 
-// --- Repo (sluša promjene u stvarnom vremenu) ---
 class DictionaryRepo(
     private val col: CollectionReference = Firebase.firestore.collection("dictionary")
 ) {
@@ -41,7 +39,6 @@ class DictionaryRepo(
             }
 }
 
-// --- ViewModel (drži stanje i filtrira lokalno) ---
 class DictionaryVM(
     private val repo: DictionaryRepo = DictionaryRepo()
 ) : ViewModel() {
@@ -87,7 +84,6 @@ class DictionaryVM(
     }
 }
 
-// --- UI ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DictionaryScreen(
@@ -122,7 +118,7 @@ fun DictionaryScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),             // 2) lista zauzme ostatak i skrola
+                    .weight(1f),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(vm.results, key = { it.id }) { w ->

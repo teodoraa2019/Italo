@@ -45,9 +45,6 @@ fun ProfileScreen(
             Text(user?.displayName ?: "Bez imena", style = MaterialTheme.typography.titleMedium)
             Text(user?.email ?: "Bez e‑pošte", style = MaterialTheme.typography.bodyMedium)
 
-            /*Divider(Modifier.padding(vertical = 8.dp))
-            Text("UID: ${user?.uid ?: "-"}", style = MaterialTheme.typography.bodySmall)*/
-
             Spacer(Modifier.height(16.dp))
             Button(onClick = onEdit, modifier = Modifier.fillMaxWidth()) {
                 Text("Uredi profil")

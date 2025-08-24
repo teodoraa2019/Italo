@@ -13,7 +13,6 @@ object Repo {
         // ...
     )
 
-    // ⬇️ Premjesti kvizove UNUTAR Repo
     private val quizzesSeed = listOf(
         Quiz(1, "Kviz 1 - osnove"),
         Quiz(2, "Kviz 2 - brojevi"),
@@ -33,5 +32,5 @@ object Repo {
         return all.getOrNull(idx + 1)
     }
 
-    fun getQuizzes(): List<Quiz> = quizzesSeed   // ✅ sad postoji Repo.getQuizzes()
+    fun getQuizzes(): List<Quiz> = quizzesSeed
 }

@@ -131,7 +131,6 @@ class ProfileViewModel : ViewModel() {
         error.value = null
 
         viewModelScope.launch {
-            // prvo uploadaj sliku (ako postoji), zatim spremi sve u Firestore + Auth
             if (imageUri != null) {
                 val ref = storage.reference.child("users/${user.uid}/profile.jpg")
                 ref.putFile(imageUri)
@@ -151,13 +150,11 @@ class ProfileViewModel : ViewModel() {
 
     private fun updateAll(name: String, photoUrl: String?, onDone: () -> Unit) {
         val user = auth.currentUser ?: return
-        // 1) Auth profil
         val req = userProfileChangeRequest {
             displayName = name
             if (photoUrl != null) photoUri = Uri.parse(photoUrl)
         }
         user.updateProfile(req).addOnCompleteListener {
-            // 2) Firestore dokument
             val data = hashMapOf(
                 "uid" to user.uid,
                 "displayName" to name,
