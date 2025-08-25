@@ -16,7 +16,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 @Composable
 fun ProfileScreen(
     onBack: () -> Unit,
-    onEdit: () -> Unit    // ⬅️ novo
+    onEdit: () -> Unit
 ) {
     val user = Firebase.auth.currentUser
 

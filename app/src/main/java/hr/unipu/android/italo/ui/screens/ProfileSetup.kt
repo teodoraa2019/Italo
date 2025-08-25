@@ -21,6 +21,8 @@ import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.storage.ktx.storage
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import kotlin.toString
 
 data class UserProfile(
     val uid: String = "",
@@ -66,6 +68,15 @@ fun UserProfileSetupScreen(
 
             Spacer(Modifier.height(12.dp))
 
+            val previewModel: Any? = imageUri ?: existingPhotoUrl
+            AsyncImage(
+                model = previewModel,
+                contentDescription = "Profilna slika",
+                modifier = Modifier.fillMaxWidth().height(200.dp)
+            )
+
+            Spacer(Modifier.height(12.dp))
+
             Button(
                 onClick = {
                     pickImage.launch(
@@ -75,17 +86,6 @@ fun UserProfileSetupScreen(
             ) { Text(if (imageUri == null) "Odaberi sliku" else "Promijeni sliku") }
 
             Spacer(Modifier.height(12.dp))
-
-            imageUri?.let {
-                AsyncImage(
-                    model = it,
-                    contentDescription = "Odabrana slika",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
-                )
-                Spacer(Modifier.height(8.dp))
-            }
 
             if (error != null) {
                 Text(error ?: "", color = MaterialTheme.colorScheme.error)
@@ -123,37 +123,52 @@ class ProfileViewModel : ViewModel() {
     val error = mutableStateOf<String?>(null)
 
     fun saveProfile(name: String, imageUri: Uri?, onDone: () -> Unit) {
-        val user = auth.currentUser ?: run {
-            error.value = "Niste prijavljeni."
-            return
-        }
-        loading.value = true
-        error.value = null
+        val user = auth.currentUser ?: run { error.value = "Niste prijavljeni."; return }
+        loading.value = true; error.value = null
 
         viewModelScope.launch {
-            if (imageUri != null) {
-                val ref = storage.reference.child("users/${user.uid}/profile.jpg")
-                ref.putFile(imageUri)
-                    .continueWithTask { ref.downloadUrl }
-                    .addOnSuccessListener { dl ->
-                        updateAll(name, dl.toString(), onDone)
-                    }
-                    .addOnFailureListener {
-                        loading.value = false
-                        error.value = "Greška pri uploadu slike."
-                    }
-            } else {
-                updateAll(name, null, onDone)
+            try {
+                val photoUrl = imageUri?.let {
+                    val ref = storage.reference.child("avatars/${user.uid}/profile.jpg")
+                    ref.putFile(it).await()
+                    ref.downloadUrl.await().toString()
+                }
+
+                val req = userProfileChangeRequest {
+                    displayName = name
+                    if (photoUrl != null) photoUri = Uri.parse(photoUrl)
+                }
+                user.updateProfile(req).await()
+                user.reload().await() // da odmah dobiješ novi photoUrl/displayName
+
+                val data = hashMapOf(
+                    "uid" to user.uid,
+                    "displayName" to name,
+                    "photoUrl" to (photoUrl ?: user.photoUrl?.toString().orEmpty()),
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+                db.collection("users").document(user.uid)
+                    .set(data, com.google.firebase.firestore.SetOptions.merge())
+                    .await()
+
+                loading.value = false
+                onDone()
+            } catch (e: Exception) {
+                loading.value = false
+                error.value = e.message ?: "Greška pri uploadu/slanju."
             }
         }
     }
 
-    private fun updateAll(name: String, photoUrl: String?, onDone: () -> Unit) {
+    private suspend fun updateAll(name: String, photoUrl: String?, onDone: () -> Unit) {
         val user = auth.currentUser ?: return
         val req = userProfileChangeRequest {
             displayName = name
             if (photoUrl != null) photoUri = Uri.parse(photoUrl)
         }
+        user.updateProfile(req).await()
+        user.reload().await()
+
         user.updateProfile(req).addOnCompleteListener {
             val data = hashMapOf(
                 "uid" to user.uid,
