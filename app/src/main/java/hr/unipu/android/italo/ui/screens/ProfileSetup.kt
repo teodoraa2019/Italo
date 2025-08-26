@@ -35,6 +35,7 @@ data class UserProfile(
 @Composable
 fun UserProfileSetupScreen(
     onDone: () -> Unit,
+    onSkip: () -> Unit,
     vm: ProfileViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
     val current = Firebase.auth.currentUser
@@ -108,7 +109,7 @@ fun UserProfileSetupScreen(
 
             TextButton(
                 enabled = !loading,
-                onClick = onDone
+                onClick = onSkip
             ) { Text("Preskoči") }
         }
     }
@@ -139,7 +140,7 @@ class ProfileViewModel : ViewModel() {
                     if (photoUrl != null) photoUri = Uri.parse(photoUrl)
                 }
                 user.updateProfile(req).await()
-                user.reload().await() // da odmah dobiješ novi photoUrl/displayName
+                user.reload().await()
 
                 val data = hashMapOf(
                     "uid" to user.uid,

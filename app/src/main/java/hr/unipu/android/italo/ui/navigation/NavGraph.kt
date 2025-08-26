@@ -37,7 +37,7 @@ fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
         composable(Route.Register.path) {
             RegisterScreen(
                 onGoToLogin = { nav.navigate(Route.Login.path) },
-                onRegisterSuccess = { nav.navigate(Route.Menu.path) { popUpTo(0) } }
+                onRegisterSuccess = { nav.navigate("profileSetup") { popUpTo(0) } }
             )
         }
         composable(Route.Login.path) {
@@ -153,8 +153,12 @@ fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
                 onEdit = { nav.navigate("profileSetup") }
             )
         }
+
         composable("profileSetup") {
-            UserProfileSetupScreen(onDone = { nav.navigate(Route.Profile.path) { popUpTo(0) } })
+            UserProfileSetupScreen(
+                onDone = { nav.navigate(Route.Profile.path) { popUpTo(0) } },
+                onSkip = { nav.navigate(Route.Menu.path) { popUpTo(0) } }
+            )
         }
 
         // Rječnik i ČPP
