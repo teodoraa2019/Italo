@@ -15,6 +15,10 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.ExperimentalMaterial3Api
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
+import com.google.firebase.firestore.firestore
+import kotlinx.coroutines.tasks.await
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,23 +56,51 @@ fun LessonDetailScreen(
 
             Spacer(Modifier.weight(1f))
 
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.Center
+            ) {
                 IconButton(enabled = prev != null, onClick = { prev?.let { onOpenLesson(it.id) } }) {
                     Icon(Icons.Default.ChevronLeft, contentDescription = "Prethodna")
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    all.forEachIndexed { i, l ->
+
+                Row(
+                    modifier = Modifier.wrapContentWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val total = all.size
+                    val start = maxOf(0, curIndex - 2)
+                    val end = minOf(total - 1, curIndex + 1)
+
+                    for (i in start..end) {
                         val selected = i == curIndex
                         AssistChip(
-                            onClick = { onOpenLesson(l.id) },
-                            label = { Text("${i + 1}") },
+                            onClick = { onOpenLesson(all[i].id) },
+                            label = {
+                                Text(
+                                    text = "${i + 1}",
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            },
+                            modifier = Modifier.widthIn(min = 44.dp),
                             colors = AssistChipDefaults.assistChipColors(
                                 containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
                                 else MaterialTheme.colorScheme.surfaceVariant
                             )
                         )
                     }
+
+                    val isLast = curIndex == all.lastIndex
+
+                    LaunchedEffect(courseId, groupId, isLast) {
+                        if (isLast) {
+                            try { markGroupCompleted(courseId, groupId) } catch (_: Exception) { }
+                        }
+                    }
+
                 }
+
                 IconButton(enabled = next != null, onClick = { next?.let { onOpenLesson(it.id) } }) {
                     Icon(Icons.Default.ChevronRight, contentDescription = "Sljedeća")
                 }
@@ -76,4 +108,17 @@ fun LessonDetailScreen(
         }
     }
 }
+
+suspend fun markGroupCompleted(courseId: String, groupId: String) {
+    val uid = Firebase.auth.currentUser?.uid ?: return
+    val db = Firebase.firestore
+    val ref = db.collection("users").document(uid).collection("progress").document(courseId)
+    db.runTransaction { tx ->
+        val cur = tx.get(ref)
+        val groups = (cur.get("groups") as? List<*>)?.mapNotNull { it as? String }?.toMutableSet() ?: mutableSetOf()
+        groups += groupId
+        tx.set(ref, mapOf("groups" to groups))
+    }.await()
+}
+
 

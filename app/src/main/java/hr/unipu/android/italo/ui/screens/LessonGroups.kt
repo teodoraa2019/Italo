@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -33,6 +34,7 @@ import com.google.firebase.ktx.Firebase
 import com.google.firebase.firestore.ktx.firestore
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import com.google.firebase.auth.ktx.auth
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -75,14 +77,15 @@ fun LessonGroupsScreen(
                 else -> LazyColumn {
                     items(vm.groups, key = { it.id }) { g ->
                         ListItem(
-                            leadingContent = { Icon(Icons.Filled.Star, contentDescription = null) },
-                            headlineContent = { Text(g.label) },
-                            trailingContent = {
+                            leadingContent = {
                                 Icon(
-                                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                    contentDescription = null
+                                    Icons.Filled.Star,
+                                    contentDescription = null,
+                                    tint = if (g.completed) Color(0xFFFFD700) else MaterialTheme.colorScheme.outline
                                 )
                             },
+                            headlineContent = { Text(g.label) },
+                            trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) },
                             modifier = Modifier.clickable { onOpenGroup(g.id) }
                         )
                         Divider()
@@ -93,7 +96,7 @@ fun LessonGroupsScreen(
     }
 }
 
-data class LessonGroup(val id: String, val label: String, val count: Int)
+data class LessonGroup(val id: String, val label: String, val count: Int, val completed: Boolean = false )
 
 class LessonGroupsVM(private val courseId: String) : ViewModel() {
 
@@ -113,6 +116,7 @@ class LessonGroupsVM(private val courseId: String) : ViewModel() {
     private fun loadGroups() = viewModelScope.launch {
         try {
             val db = Firebase.firestore
+            val uid = Firebase.auth.currentUser?.uid
             val candidates = buildList {
                 add("lessons")
                 for (i in 1..9) add("lessons_$i")
@@ -142,7 +146,14 @@ class LessonGroupsVM(private val courseId: String) : ViewModel() {
                 }
             }
 
-            groups = found.ifEmpty { emptyList() }
+            val completedSet: Set<String> = if (uid != null) {
+                db.collection("users").document(uid)
+                    .collection("progress").document(courseId)         // doc: { groups: ["lessons", "lessons_1", ...] }
+                    .get().await()
+                    .get("groups")?.let { it as? List<*> }?.mapNotNull { it as? String }?.toSet() ?: emptySet()
+            } else emptySet()
+
+            groups = found.map { it.copy(completed = it.id in completedSet) }
         } catch (e: Exception) {
             error = e.message ?: "Nešto je pošlo po zlu."
         } finally {
