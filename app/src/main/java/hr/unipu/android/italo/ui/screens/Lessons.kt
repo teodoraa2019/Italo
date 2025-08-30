@@ -25,7 +25,6 @@ fun LessonsScreen(courseId: String, groupId: String, onOpenLesson: (String) -> U
         factory = LessonsVM.factory(courseId, groupId)
     )
 
-
     Scaffold(topBar = {
         TopAppBar(title = { Text("TEČAJ") },
             navigationIcon = { IconButton(onClick = onBackToMenu) { Icon(Icons.Filled.ArrowBack, contentDescription = null) } })
@@ -49,7 +48,7 @@ fun LessonsScreen(courseId: String, groupId: String, onOpenLesson: (String) -> U
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                l.content,
+                                l.title,
                                 style = MaterialTheme.typography.titleLarge,
                                 textAlign = TextAlign.Center
                             )
@@ -64,12 +63,12 @@ fun LessonsScreen(courseId: String, groupId: String, onOpenLesson: (String) -> U
                             )
                             Spacer(Modifier.height(8.dp))
 
-                            Text(
-                                l.title,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                textAlign = TextAlign.Center
-                            )
+//                            Text(
+//                                l.title,
+//                                style = MaterialTheme.typography.titleMedium,
+//                                color = MaterialTheme.colorScheme.primary,
+//                                textAlign = TextAlign.Center
+//                            )
                         }
                     }
                 }

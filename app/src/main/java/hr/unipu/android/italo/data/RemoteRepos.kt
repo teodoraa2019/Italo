@@ -11,6 +11,7 @@ import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import androidx.compose.runtime.mutableStateMapOf
 
 data class CourseFS(
     val id: String = "",
@@ -91,6 +92,18 @@ class LessonsVM(
                 )
             }
         } catch (e: Exception) { error = e.message }
+    }
+
+    private val _locks = mutableStateMapOf<String, Boolean>()
+
+    fun isLocked(lessonId: String): Boolean = _locks[lessonId] == true
+
+    fun lock(lessonId: String) {
+        _locks[lessonId] = true
+    }
+
+    fun clearLocks() {
+        _locks.clear()
     }
 
     companion object {
