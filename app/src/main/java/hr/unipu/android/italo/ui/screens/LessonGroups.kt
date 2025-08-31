@@ -41,6 +41,16 @@ fun LessonGroupsScreen(
         lifecycleOwner.lifecycle.addObserver(obs)
         onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
     }
+    var courseTitle by remember { mutableStateOf("TEČAJ") }
+
+    LaunchedEffect(courseId) {
+        try {
+            val snap = Firebase.firestore.collection("courses")
+                .document(courseId).get().await()
+            courseTitle = snap.getString("description")
+                ?: snap.getString("title") ?: "TEČAJ"
+        } catch (_: Exception) { /* zadrži default */ }
+    }
 
     Scaffold(
         topBar = {
@@ -51,7 +61,7 @@ fun LessonGroupsScreen(
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            TabRow(selectedTabIndex = 0) { Tab(selected = true, onClick = {}, text = { Text("TEČAJ") }) }
+            TabRow(selectedTabIndex = 0) { Tab(selected = true, onClick = {}, text = { Text(courseTitle) }) }
 
             when {
                 vm.error != null ->
@@ -169,22 +179,21 @@ class LessonGroupsVM(private val courseId: String) : ViewModel() {
                     } else 0
 
                     val pct = if (total > 0) (solved * 100) / total else 0
+                    val idx = found.size + 1                      // ← redni broj grupe
+                    val label = "Lekcija $idx ($total)"           // ← singular
+
                     found += LessonGroup(
                         id = name,
-                        label = toPrettyLabel(name, total),
+                        label = label,
                         count = total,
                         percent = pct,
                         completed = name in completedSet
                     )
                 }
             }
+
             groups = found
         } catch (e: Exception) { error = e.message } finally { loading = false }
-    }
-
-    private fun toPrettyLabel(raw: String, count: Int): String {
-        val base = if (raw == "lessons") "Lekcije" else "Lekcije " + raw.substringAfter('_')
-        return "$base ($count)"
     }
 
     companion object {
