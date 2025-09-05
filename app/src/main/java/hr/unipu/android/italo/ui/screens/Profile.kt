@@ -16,7 +16,8 @@ import androidx.compose.material.icons.filled.ArrowBack
 @Composable
 fun ProfileScreen(
     onBack: () -> Unit,
-    onEdit: () -> Unit
+    onEdit: () -> Unit,
+    onOpenProgress: () -> Unit
 ) {
     val user = Firebase.auth.currentUser
 
@@ -48,6 +49,9 @@ fun ProfileScreen(
             Spacer(Modifier.height(16.dp))
             Button(onClick = onEdit, modifier = Modifier.fillMaxWidth()) {
                 Text("Uredi profil")
+            }
+            OutlinedButton(onClick = onOpenProgress, modifier = Modifier.fillMaxWidth()) {
+                Text("Prikaži napredak")
             }
         }
     }

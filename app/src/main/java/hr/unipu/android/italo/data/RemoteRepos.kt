@@ -25,11 +25,12 @@ data class LessonFS(
     val id: String = "",
     val title: String = "",
     val content: String = "",
-    val imageUrl: String = ""
+    val imageUrl: String = "",
+    val order: Int = 0
 )
 
 class CoursesRepoFS {
-    private val courses = Firebase.firestore.collection("courses")
+    private val courses = Firebase.firestore.collection("courses_a1")
 
     fun listenCourses(
         onOk: (List<CourseFS>) -> Unit,
@@ -54,6 +55,7 @@ class CoursesRepoFS {
         onErr: (Throwable) -> Unit
     ): ListenerRegistration =
         courses.document(courseDocId).collection(groupId)
+            .orderBy("order")
             .addSnapshotListener { s, e ->
                 if (e != null) return@addSnapshotListener onErr(e)
                 onOk(s?.documents?.map { d ->
@@ -79,8 +81,9 @@ class LessonsVM(
     private fun load() = viewModelScope.launch {
         try {
             val snap = Firebase.firestore
-                .collection("courses").document(courseId)
+                .collection("courses_a1").document(courseId)
                 .collection(groupId)
+                .orderBy("order")
                 .get().await()
 
             items = snap.documents.map { d ->

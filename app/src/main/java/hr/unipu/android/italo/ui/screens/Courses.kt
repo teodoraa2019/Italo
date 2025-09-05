@@ -1,27 +1,10 @@
 package hr.unipu.android.italo.ui.screens
 
-import hr.unipu.android.italo.data.Repo
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-
-//@Composable
-//fun CoursesScreen(onOpenCourse: (Int) -> Unit) {
-//    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-//        Text("Tečajevi", style = MaterialTheme.typography.headlineSmall)
-//        Repo.getCourses().forEach { c ->
-//            Card(onClick = { onOpenCourse(c.id) }, modifier = Modifier.fillMaxWidth()) {
-//                Column(Modifier.padding(16.dp)) {
-//                    Text(c.titleHr, style = MaterialTheme.typography.titleMedium)
-//                    Text(c.titleIt, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-//                }
-//            }
-//        }
-//    }
-//}
 
 @Composable
 fun CoursesScreen(onOpenCourse: (String) -> Unit, vm: CoursesVM = androidx.lifecycle.viewmodel.compose.viewModel()) {

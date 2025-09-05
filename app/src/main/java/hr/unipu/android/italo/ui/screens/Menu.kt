@@ -26,7 +26,7 @@ import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.firestore.ktx.firestore
 import kotlinx.coroutines.tasks.await
-import hr.unipu.android.italo.data.Repo
+import androidx.compose.material.icons.filled.ArrowBack
 
 private fun starColor(pct: Int): Color {
     val p = pct.coerceIn(0, 100)
@@ -62,7 +62,8 @@ fun FilledStar(percent: Int, size: Dp = 24.dp) {
 @Composable
 fun MenuScreen(
     onOpenCourse: (String) -> Unit,
-    onOpenQuiz: (Int) -> Unit,
+    onOpenQuizzes: (String) -> Unit,
+    onOpenExams: (String) -> Unit,
     onOpenProfile: () -> Unit,
     onLogout: () -> Unit,
     vm: CoursesVM = viewModel()
@@ -195,12 +196,18 @@ fun MenuScreen(
                     }
                 }
             } else {
-                val quizzes = Repo.getQuizzes()
                 LazyColumn {
-                    items(quizzes, key = { it.id }) { q ->
+                    item {
                         ListItem(
-                            headlineContent = { Text(q.title) },
-                            modifier = Modifier.clickable { onOpenQuiz(q.id) }
+                            headlineContent = { Text("Kvizovi") },
+                            modifier = Modifier.clickable { onOpenQuizzes("quiz_1") }
+                        )
+                        Divider()
+                    }
+                    item {
+                        ListItem(
+                            headlineContent = { Text("Ispiti znanja") },
+                            modifier = Modifier.clickable { onOpenExams("exam_1") }
                         )
                         Divider()
                     }

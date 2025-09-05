@@ -1,81 +1,92 @@
 package hr.unipu.android.italo.ui.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import kotlinx.coroutines.launch
-import com.google.firebase.Firebase
-import com.google.firebase.auth.auth
+import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.SetOptions
-import com.google.firebase.firestore.firestore
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import hr.unipu.android.italo.data.LessonsVM
 import com.google.firebase.firestore.FieldValue
+
+data class QuizItem(
+    val id: String,
+    val question: String = "",
+    val answer: String = "",
+    val imageUrl: String = ""
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LessonDetailScreen(
-    groupId: String,
+fun QuizDetailScreen(
     courseId: String,
-    lessonId: String,
-    onBackToList: (Boolean) -> Unit,
-    onOpenLesson: (String) -> Unit
+    quizId: String,
+    groupId: String,
+    taskId: String,
+    onBackToList: () -> Unit,
+    onOpenTask: (String) -> Unit
 ) {
-    val vm: LessonsVM = androidx.lifecycle.viewmodel.compose.viewModel(
-        factory = LessonsVM.factory(groupId = groupId, courseId = courseId)
-    )
     val scope = rememberCoroutineScope()
+    var items by remember(groupId, quizId) { mutableStateOf(listOf<QuizItem>()) }
 
-    val items = vm.items
-    if (items.isEmpty()) {
+    LaunchedEffect(quizId, groupId) {
+        val db = Firebase.firestore
+        val col = db.collection("quizzes_a1").document(quizId).collection(groupId)
+        val snap = try { col.orderBy("order").get().await() } catch (_: Exception) { col.get().await() }
+        items = snap.documents.map {
+            QuizItem(
+                id = it.id,
+                question = it.getString("question") ?: "",
+                answer = it.getString("answer") ?: "",
+                imageUrl = it.getString("imageUrl") ?: ""
+            )
+        }
+    }
+
+    LaunchedEffect(items, taskId) {
+        if (taskId == "first" && items.isNotEmpty()) onOpenTask(items.first().id)
+    }
+
+    val current = items.firstOrNull { it.id == taskId }
+    if (current == null) {
         Scaffold(topBar = {
             TopAppBar(
                 title = { Text("POVRATAK NA MENU") },
-                navigationIcon = { IconButton(onClick = { onBackToList(false) }) { Icon(Icons.Filled.ArrowBack, null) } }
+                navigationIcon = { IconButton(onClick = onBackToList) { Icon(Icons.Filled.ArrowBack, null) } }
             )
-        }) { padding ->
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        }
+        }) { Box(Modifier.fillMaxSize().padding(it), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
         return
     }
 
-    val lesson = items.firstOrNull { it.id == lessonId } ?: run {
-        AssistiveError("Lekcija nije pronađena"); return
-    }
-
     val all = items
-    val curIndex = all.indexOfFirst { it.id == lessonId }
-    val prev = all.getOrNull(curIndex - 1)
-    val next = all.getOrNull(curIndex + 1)
+    val curIndex = items.indexOfFirst { it.id == current.id }
+    val prev = items.getOrNull(curIndex - 1)
+    val next = items.getOrNull(curIndex + 1)
 
-    var locked by remember(lesson.id) { mutableStateOf(false) }
-    var wasCorrect by remember(lesson.id) { mutableStateOf<Boolean?>(null) }
-    var answer by remember(lesson.id) { mutableStateOf("") }
-    val target = remember(lesson.id) { (lesson.title ?: "").trim().lowercase() }
+    var locked by remember(current.id) { mutableStateOf(false) }
+    var wasCorrect by remember(current.id) { mutableStateOf<Boolean?>(null) }
+    var answer by remember(current.id) { mutableStateOf("") }
+    val target = remember(current.id) { current.answer.trim().lowercase() }
 
-    LaunchedEffect(courseId, groupId, lesson.id) {
+    LaunchedEffect(courseId, quizId, groupId, current.id) {
         val uid = Firebase.auth.currentUser?.uid ?: return@LaunchedEffect
         val db = Firebase.firestore
         val docRef = db.collection("users").document(uid)
             .collection("progress").document(courseId)
-            .collection("lessons").document("${groupId}__${lesson.id}")
+            .collection("quizzes").document("${quizId}__${groupId}__${current.id}")
 
         val snap = docRef.get().await()
         if (snap.exists()) {
@@ -92,7 +103,7 @@ fun LessonDetailScreen(
     Scaffold(topBar = {
         TopAppBar(
             title = { Text("POVRATAK NA MENU") },
-            navigationIcon = { IconButton(onClick = { onBackToList(true) }) { Icon(Icons.Filled.ArrowBack, null) } }
+            navigationIcon = { IconButton(onClick = onBackToList) { Icon(Icons.Filled.ArrowBack, null) } }
         )
     }) { padding ->
         Column(
@@ -100,20 +111,22 @@ fun LessonDetailScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current).data(lesson.imageUrl).build(),
-                contentDescription = lesson.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.size(180.dp).clip(MaterialTheme.shapes.extraLarge)
-            )
+            if (current.imageUrl.isNotBlank()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current).data(current.imageUrl).build(),
+                    contentDescription = current.question,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(180.dp).clip(MaterialTheme.shapes.extraLarge)
+                )
+            }
 
-            Text(lesson.content, style = MaterialTheme.typography.headlineMedium)
+            Text(current.question, style = MaterialTheme.typography.headlineMedium)
 
             OutlinedTextField(
                 value = answer,
                 onValueChange = { if (!locked) answer = it },
                 enabled = !locked,
-                label = { Text("Upiši riječ na talijanskom") },
+                label = { Text("Upiši odgovor") },
                 singleLine = true,
                 trailingIcon = {
                     if (wasCorrect != null) {
@@ -134,8 +147,6 @@ fun LessonDetailScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(Modifier.height(8.dp))
-
             Button(
                 onClick = {
                     scope.launch {
@@ -151,18 +162,21 @@ fun LessonDetailScreen(
                         val db = Firebase.firestore
                         val courseRef = db.collection("users").document(uid)
                             .collection("progress").document(courseId)
-                        val lessonRef = courseRef.collection("lessons")
-                            .document("${groupId}__${lessonId}")
-                        val statsRef = courseRef.collection("meta").document("stats")
+                        val itemRef = courseRef.collection("quizzes")
+                            .document("${quizId}__${groupId}__${current.id}")
+                        val statsRef = courseRef.collection("meta").document("quiz_stats")
 
                         courseRef.set(mapOf("exists" to true), SetOptions.merge()).await()
-                        lessonRef.set(
+                        itemRef.set(
                             mapOf(
                                 "attempted" to true,
                                 "answer" to raw,
                                 "correct" to isCorrect,
+                                "quizId" to quizId,
                                 "groupId" to groupId,
-                                "lessonId" to lessonId
+                                "itemId" to current.id,
+                                "question" to current.question,
+                                "expected" to current.answer
                             ),
                             SetOptions.merge()
                         ).await()
@@ -171,7 +185,7 @@ fun LessonDetailScreen(
                             val statsSnap = tx.get(statsRef)
                             val total = (statsSnap.getLong("total") ?: 0L) + 1
                             var correct = (statsSnap.getLong("correct") ?: 0L)
-                            val alreadyCorrect = (tx.get(lessonRef).getBoolean("correct") ?: false)
+                            val alreadyCorrect = (tx.get(itemRef).getBoolean("correct") ?: false)
                             if (isCorrect && !alreadyCorrect) correct += 1
                             tx.set(statsRef, mapOf("total" to total, "correct" to correct), SetOptions.merge())
                         }.await()
@@ -182,7 +196,7 @@ fun LessonDetailScreen(
 
             if (wasCorrect == false) {
                 Spacer(Modifier.height(6.dp))
-                Text("Točan odgovor: ${lesson.title}", color = MaterialTheme.colorScheme.error)
+                Text("Točan odgovor: ${current.answer}", color = MaterialTheme.colorScheme.error)
             }
 
             Spacer(Modifier.weight(1f))
@@ -191,7 +205,7 @@ fun LessonDetailScreen(
                 Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                 horizontalArrangement = Arrangement.Center
             ) {
-                IconButton(enabled = prev != null, onClick = { prev?.let { onOpenLesson(it.id) } }) {
+                IconButton(enabled = prev != null, onClick = { prev?.let { onOpenTask(it.id) } }) {
                     Icon(Icons.Default.ChevronLeft, contentDescription = "Prethodna")
                 }
 
@@ -205,7 +219,7 @@ fun LessonDetailScreen(
                     for (i in start..end) {
                         val selected = i == curIndex
                         AssistChip(
-                            onClick = { onOpenLesson(all[i].id) },
+                            onClick = { onOpenTask(all[i].id) },
                             label = { Text("${i + 1}", maxLines = 1, softWrap = false) },
                             modifier = Modifier.widthIn(min = 44.dp),
                             colors = AssistChipDefaults.assistChipColors(
@@ -216,7 +230,7 @@ fun LessonDetailScreen(
                     }
                 }
 
-                IconButton(enabled = next != null, onClick = { next?.let { onOpenLesson(it.id) } }) {
+                IconButton(enabled = next != null, onClick = { next?.let { onOpenTask(it.id) } }) {
                     Icon(Icons.Default.ChevronRight, contentDescription = "Sljedeća")
                 }
             }
@@ -226,8 +240,8 @@ fun LessonDetailScreen(
             Button(
                 onClick = {
                     scope.launch {
-                        try { markGroupCompleted(courseId, groupId) } catch (_: Exception) {}
-                        onBackToList(true)
+                        try { markQuizGroupCompleted(courseId, quizId, groupId) } catch (_: Exception) {}
+                        onBackToList()  // vrati se na listu grupa; QuizGroupsScreen će se reloadati i pokazati Restart
                     }
                 },
                 modifier = Modifier.fillMaxWidth(0.6f)
@@ -236,15 +250,18 @@ fun LessonDetailScreen(
     }
 }
 
-suspend fun markGroupCompleted(courseId: String, groupId: String) {
+
+suspend fun markQuizGroupCompleted(courseId: String, quizId: String, groupId: String) {
     val uid = Firebase.auth.currentUser?.uid ?: return
     val db = Firebase.firestore
     val ref = db.collection("users").document(uid)
         .collection("progress").document(courseId)
 
-    ref.update("groups", FieldValue.arrayUnion(groupId))
+    val key = "quizzes_groups"
+    val value = "$quizId::$groupId"
+
+    ref.update(key, FieldValue.arrayUnion(value))
         .addOnFailureListener {
-            ref.set(mapOf("groups" to listOf(groupId)), SetOptions.merge())
+            ref.set(mapOf(key to listOf(value)), SetOptions.merge())
         }.await()
 }
-

@@ -13,11 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.firebase.auth.ktx.auth
@@ -27,31 +24,23 @@ import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
+data class ExamGroup(
+    val id: String,
+    val label: String,
+    val count: Int,
+    val percent: Int = 0,
+    val completed: Boolean = false
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LessonGroupsScreen(
+fun ExamGroupsScreen(
     courseId: String,
+    examId: String,
     onOpenGroup: (String) -> Unit,
     onBack: () -> Unit,
-    vm: LessonGroupsVM = viewModel(factory = LessonGroupsVM.factory(courseId))
+    vm: ExamGroupsVM = viewModel(factory = ExamGroupsVM.factory(courseId, examId))
 ) {
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) vm.reload() }
-        lifecycleOwner.lifecycle.addObserver(obs)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
-    }
-    var courseTitle by remember { mutableStateOf("TEČAJ") }
-
-    LaunchedEffect(courseId) {
-        try {
-            val snap = Firebase.firestore.collection("courses")
-                .document(courseId).get().await()
-            courseTitle = snap.getString("description")
-                ?: snap.getString("title") ?: "TEČAJ"
-        } catch (_: Exception) { /* zadrži default */ }
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -61,16 +50,18 @@ fun LessonGroupsScreen(
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            TabRow(selectedTabIndex = 0) { Tab(selected = true, onClick = {}, text = { Text(courseTitle) }) }
+            TabRow(selectedTabIndex = 0) {
+                val num = examId.substringAfter("exam_", missingDelimiterValue = "").ifBlank { "?" }
+                Tab(selected = true, onClick = {}, text = { Text("ISPIT $num") })
+            }
 
             when {
                 vm.error != null ->
                     Text("Greška: ${vm.error}", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
                 vm.groups.isEmpty() && !vm.loading ->
-                    Text("Nema pronađenih lekcija.", modifier = Modifier.padding(16.dp))
+                    Text("Nema pronađenih grupa.", modifier = Modifier.padding(16.dp))
                 else -> LazyColumn {
                     items(vm.groups, key = { it.id }) { g ->
-                        val dim = g.completed
                         ListItem(
                             leadingContent = { FilledStar(percent = g.percent, size = 24.dp) },
                             headlineContent = {
@@ -80,11 +71,11 @@ fun LessonGroupsScreen(
                                         Text(
                                             "${g.percent}%",
                                             color = when {
-                                                g.percent == 100 -> Color(0xFF4CAF50)   // zeleno
-                                                g.percent >= 67 -> Color(0xFFA2FF31)   // žuto-zeleno
-                                                g.percent >= 34 -> Color(0xFFFFEB3B)   // žuto
-                                                g.percent > 0   -> Color(0xFFFF7043)   // narančasto
-                                                else            -> Color(0xFFF61700)   // crveno
+                                                g.percent == 100 -> Color(0xFF4CAF50)
+                                                g.percent >= 67  -> Color(0xFFA2FF31)
+                                                g.percent >= 34  -> Color(0xFFFFEB3B)
+                                                g.percent > 0    -> Color(0xFFFF7043)
+                                                else             -> Color(0xFFF61700)
                                             },
                                             style = MaterialTheme.typography.bodySmall
                                         )
@@ -92,9 +83,7 @@ fun LessonGroupsScreen(
                                 } else {
                                     Text(g.label)
                                 }
-                            }
-
-                            ,
+                            },
                             trailingContent = {
                                 if (g.completed)
                                     OutlinedButton(onClick = { vm.restartGroup(g.id) }) { Text("Restart") }
@@ -102,7 +91,7 @@ fun LessonGroupsScreen(
                                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
                             },
                             modifier = Modifier
-                                .alpha(if (dim) 0.5f else 1f)
+                                .alpha(if (g.completed) 0.5f else 1f)
                                 .then(if (!g.completed) Modifier.clickable { onOpenGroup(g.id) } else Modifier)
                         )
                         Divider()
@@ -113,17 +102,8 @@ fun LessonGroupsScreen(
     }
 }
 
-data class LessonGroup(
-    val id: String,
-    val label: String,
-    val count: Int,
-    val percent: Int = 0,
-    val completed: Boolean = false
-)
-
-class LessonGroupsVM(private val courseId: String) : ViewModel() {
-
-    var groups by mutableStateOf(listOf<LessonGroup>()); private set
+class ExamGroupsVM(private val courseId: String, private val examId: String) : ViewModel() {
+    var groups by mutableStateOf(listOf<ExamGroup>()); private set
     var loading by mutableStateOf(true); private set
     var error by mutableStateOf<String?>(null); private set
 
@@ -137,12 +117,14 @@ class LessonGroupsVM(private val courseId: String) : ViewModel() {
             val progress = db.collection("users").document(uid)
                 .collection("progress").document(courseId)
 
-            val toDelete = progress.collection("lessons")
-                .whereEqualTo("groupId", groupId).get().await()
+            // obriši pokušaje u toj grupi
+            val toDelete = progress.collection("exams")
+                .whereEqualTo("examId", examId)
+                .whereEqualTo("groupId", groupId)
+                .get().await()
             for (d in toDelete.documents) d.reference.delete()
 
-            progress.update("groups", FieldValue.arrayRemove(groupId)).await()
-
+            progress.update("exams_groups", FieldValue.arrayRemove("$examId::$groupId")).await()
             loadGroups()
         } catch (e: Exception) { error = e.message }
     }
@@ -152,56 +134,51 @@ class LessonGroupsVM(private val courseId: String) : ViewModel() {
         try {
             val db = Firebase.firestore
             val uid = Firebase.auth.currentUser?.uid
-            val candidates = buildList { for (i in 1..20) add("lessons_group_$i") }
 
             val completedSet: Set<String> = if (uid != null) {
                 val progress = db.collection("users").document(uid)
                     .collection("progress").document(courseId).get().await()
-                (progress.get("groups") as? List<*>)?.mapNotNull { it as? String }?.toSet() ?: emptySet()
+                (progress.get("exams_groups") as? List<*>)?.mapNotNull { it as? String }?.toSet() ?: emptySet()
             } else emptySet()
 
-            val found = mutableListOf<LessonGroup>()
-            for (name in candidates) {
-                val probe = db.collection("courses_a1").document(courseId)
-                    .collection(name).limit(1).get().await()
+            val found = mutableListOf<ExamGroup>()
+            for (i in 1..30) {
+                val groupId = "exams_group_$i"
+                val probe = db.collection("exams_a1").document(examId).collection(groupId).limit(1).get().await()
                 if (!probe.isEmpty) {
-                    val full = db.collection("courses_a1").document(courseId)
-                        .collection(name).get().await()
-                    val total = full.size()
+                    val total = db.collection("exams_a1").document(examId).collection(groupId).get().await().size()
 
                     val solved = if (uid != null) {
                         db.collection("users").document(uid)
                             .collection("progress").document(courseId)
-                            .collection("lessons")
+                            .collection("exams")
+                            .whereEqualTo("examId", examId)
+                            .whereEqualTo("groupId", groupId)
                             .whereEqualTo("correct", true)
-                            .whereEqualTo("groupId", name)
                             .get().await().size()
                     } else 0
 
                     val pct = if (total > 0) (solved * 100) / total else 0
-                    val idx = found.size + 1                      // ← redni broj grupe
-                    val label = "Lekcija $idx ($total)"           // ← singular
-
-                    found += LessonGroup(
-                        id = name,
-                        label = label,
+                    val idx = found.size + 1
+                    found += ExamGroup(
+                        id = groupId,
+                        label = "Testovi $idx ($total)",
                         count = total,
                         percent = pct,
-                        completed = name in completedSet
+                        completed = "${examId}::${groupId}" in completedSet
                     )
                 }
             }
-
             groups = found
         } catch (e: Exception) { error = e.message } finally { loading = false }
     }
 
     companion object {
-        fun factory(courseId: String): ViewModelProvider.Factory =
+        fun factory(courseId: String, examId: String): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return LessonGroupsVM(courseId) as T
+                    return ExamGroupsVM(courseId, examId) as T
                 }
             }
     }

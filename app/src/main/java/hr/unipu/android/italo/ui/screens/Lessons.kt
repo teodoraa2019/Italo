@@ -17,6 +17,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.layout.ContentScale
 import hr.unipu.android.italo.data.LessonsVM
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,7 +52,11 @@ fun LessonsScreen(courseId: String, groupId: String, onOpenLesson: (String) -> U
                             Text(
                                 l.title,
                                 style = MaterialTheme.typography.titleLarge,
-                                textAlign = TextAlign.Center
+                                fontSize = 18.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
                             )
                             Spacer(Modifier.height(8.dp))
 
@@ -58,8 +64,8 @@ fun LessonsScreen(courseId: String, groupId: String, onOpenLesson: (String) -> U
                                 model = ImageRequest.Builder(LocalContext.current)
                                     .data(l.imageUrl).crossfade(true).build(),
                                 contentDescription = l.title,
-                                contentScale = ContentScale.Fit,
-                                modifier = Modifier.size(120.dp).clip(MaterialTheme.shapes.large)
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(140.dp).clip(MaterialTheme.shapes.large)
                             )
                             Spacer(Modifier.height(8.dp))
 

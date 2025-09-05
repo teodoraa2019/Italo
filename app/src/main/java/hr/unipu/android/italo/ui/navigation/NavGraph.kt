@@ -19,9 +19,16 @@ sealed class Route(val path: String) {
     data object Courses : Route("courses")
     data object LessonGroups : Route("course/{courseId}/groups")
     data object Profile : Route("profile")
+    data object Progress : Route("progress")
     data object Faq : Route("faq")
     data object Dictionary : Route("dictionary")
     data object Menu : Route("menu")
+    data object QuizList   : Route("quizzes/{courseId}")
+    data object QuizGroups : Route("quizzes/{courseId}/{quizId}")
+    data object QuizDetail : Route("quiz/{courseId}/{quizId}/{groupId}/{taskId}")
+    data object ExamList   : Route("exams/{courseId}")
+    data object ExamGroups : Route("exams/{courseId}/{examId}")
+    data object ExamDetail : Route("exam/{courseId}/{examId}/{groupId}/{testId}")
 }
 
 @Composable
@@ -49,10 +56,9 @@ fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
 
         composable(Route.Menu.path) {
             MenuScreen(
-                onOpenCourse = { courseId ->
-                    nav.navigate("course/$courseId/groups")
-                },
-                onOpenQuiz   = { id /* Int */ -> nav.navigate("quiz/$id") },
+                onOpenCourse = { courseId -> nav.navigate("course/$courseId/groups") },
+                onOpenQuizzes = { courseId -> nav.navigate("quizzes/$courseId") },
+                onOpenExams   = { courseId -> nav.navigate("exams/$courseId") },
                 onOpenProfile = { nav.navigate(Route.Profile.path) },
                 onLogout = { FirebaseAuth.getInstance().signOut(); nav.navigate(Route.Login.path){ popUpTo(0) } }
             )
@@ -146,13 +152,110 @@ fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
             )
         }
 
+        // KVIZOVI – 1) popis kvizova
+        composable(Route.QuizList.path) { back ->
+            val courseId = back.arguments!!.getString("courseId")!!
+            QuizListScreen(
+                courseId = courseId,
+                onOpenQuiz = { quizId -> nav.navigate("quizzes/$courseId/$quizId") },
+                onBack = { nav.popBackStack() }
+            )
+        }
+
+// KVIZOVI – 2) popis grupa u kvizu
+        composable(Route.QuizGroups.path) { back ->
+            val courseId = back.arguments!!.getString("courseId")!!
+            val quizId   = back.arguments!!.getString("quizId")!!
+            QuizGroupsScreen(
+                courseId = courseId,
+                quizId = quizId,
+                onOpenGroup = { gid -> nav.navigate("quiz/$courseId/$quizId/$gid/first") }, // preskačemo kartice
+                onBack = { nav.popBackStack() }
+            )
+        }
+
+// KVIZ – 3) detalj (pager)
+        composable(
+            route = Route.QuizDetail.path,
+            arguments = listOf(
+                navArgument("courseId"){ type = NavType.StringType },
+                navArgument("quizId"){   type = NavType.StringType },
+                navArgument("groupId"){  type = NavType.StringType },
+                navArgument("taskId"){   type = NavType.StringType }
+            )
+        ) { b ->
+            QuizDetailScreen(
+                courseId = b.arguments!!.getString("courseId")!!,
+                quizId   = b.arguments!!.getString("quizId")!!,
+                groupId  = b.arguments!!.getString("groupId")!!,
+                taskId   = b.arguments!!.getString("taskId")!!,
+                onBackToList = { nav.popBackStack() },
+                onOpenTask = { id ->
+                    nav.navigate("quiz/${b.arguments!!.getString("courseId")}/${b.arguments!!.getString("quizId")}/${b.arguments!!.getString("groupId")}/$id") {
+                        popUpTo(Route.QuizDetail.path) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        // 1) popis ispita
+        composable(Route.ExamList.path) { back ->
+            val courseId = back.arguments!!.getString("courseId")!!
+            ExamListScreen(
+                courseId = courseId,
+                onOpenExam = { examId -> nav.navigate("exams/$courseId/$examId") },
+                onBack = { nav.popBackStack() }
+            )
+        }
+
+// 2) grupe u ispitu
+        composable(Route.ExamGroups.path) { back ->
+            val courseId = back.arguments!!.getString("courseId")!!
+            val examId   = back.arguments!!.getString("examId")!!
+            ExamGroupsScreen(
+                courseId = courseId,
+                examId = examId,
+                onOpenGroup = { gid -> nav.navigate("exam/$courseId/$examId/$gid/first") },
+                onBack = { nav.popBackStack() }
+            )
+        }
+
+// 3) detalj testa (pager)
+        composable(
+            route = Route.ExamDetail.path,
+            arguments = listOf(
+                navArgument("courseId"){ type = NavType.StringType },
+                navArgument("examId"){   type = NavType.StringType },
+                navArgument("groupId"){  type = NavType.StringType },
+                navArgument("testId"){   type = NavType.StringType }
+            )
+        ) { b ->
+            ExamDetailScreen(
+                courseId = b.arguments!!.getString("courseId")!!,
+                examId   = b.arguments!!.getString("examId")!!,
+                groupId  = b.arguments!!.getString("groupId")!!,
+                testId   = b.arguments!!.getString("testId")!!,
+                onBackToList = { nav.popBackStack() },
+                onOpenTest = { id ->
+                    nav.navigate("exam/${b.arguments!!.getString("courseId")}/${b.arguments!!.getString("examId")}/${b.arguments!!.getString("groupId")}/$id") {
+                        popUpTo(Route.ExamDetail.path) { inclusive = true }
+                    }
+                }
+            )
+        }
         // Profil
         composable(Route.Profile.path) {
             ProfileScreen(
                 onBack = { nav.navigate(Route.Menu.path) },
-                onEdit = { nav.navigate("profileSetup") }
+                onEdit = { nav.navigate("profileSetup") },
+                onOpenProgress = { nav.navigate(Route.Progress.path) }   // ← NOVO
             )
         }
+
+        composable(Route.Progress.path) {
+            ProgressScreen(onBack = { nav.popBackStack() })
+        }
+
 
         composable("profileSetup") {
             UserProfileSetupScreen(
