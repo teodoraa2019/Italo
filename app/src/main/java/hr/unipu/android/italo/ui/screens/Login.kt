@@ -8,11 +8,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.auth.ktx.auth
-import androidx.compose.material3.ExperimentalMaterial3Api
+import com.google.firebase.firestore.ktx.firestore
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 @Composable
 fun LoginScreen(
-    onLoginSuccess: () -> Unit,
+    onLoginSuccess: (isAdmin: Boolean) -> Unit,
     onGoToRegister: () -> Unit
 ) {
     var email by remember { mutableStateOf("") }
@@ -20,6 +22,8 @@ fun LoginScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
     val auth = Firebase.auth
+    val db   = Firebase.firestore
+    val scope = rememberCoroutineScope()
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
@@ -39,10 +43,23 @@ fun LoginScreen(
                     error = if (email.isBlank() || pass.isBlank()) "Unesite e-mail i lozinku." else null
                     if (error == null) {
                         loading = true
-                        auth.signInWithEmailAndPassword(email.trim(), pass)
-                            .addOnSuccessListener { onLoginSuccess() }
-                            .addOnFailureListener { ex -> error = ex.fbMsg() }
-                            .addOnCompleteListener { loading = false }
+                        scope.launch {
+                            try {
+                                auth.signInWithEmailAndPassword(email.trim(), pass).await()
+                                val uid = auth.currentUser?.uid
+                                var isAdmin = false
+                                if (uid != null) {
+                                    val snap = db.collection("users").document(uid).get().await()
+                                    val role = snap.getString("role") ?: "user"
+                                    isAdmin = role == "admin"
+                                }
+                                onLoginSuccess(isAdmin)
+                            } catch (ex: Exception) {
+                                error = ex.fbMsg()
+                            } finally {
+                                loading = false
+                            }
+                        }
                     }
                 },
                 enabled = !loading,
@@ -61,15 +78,20 @@ fun LoginScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LoginRequiredScreen(onGoToLogin: () -> Unit, onBack: () -> Unit) {
+fun LoginRequiredScreen(
+    onGoToLogin: () -> Unit,
+    onBack: () -> Unit
+) {
     Scaffold(topBar = { TopAppBar(title = { Text("Potrebna prijava") }) }) { p ->
-        Column(Modifier.padding(p).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(
+            Modifier.padding(p).padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             Text("Za pristup lekcijama potrebno je prijaviti se.")
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(onClick = onGoToLogin) { Text("Prijava") }
                 OutlinedButton(onClick = onBack) { Text("Natrag") }
             }
         }
     }
 }
-

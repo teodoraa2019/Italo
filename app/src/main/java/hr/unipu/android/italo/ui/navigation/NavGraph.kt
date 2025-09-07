@@ -15,6 +15,7 @@ sealed class Route(val path: String) {
     data object Info : Route("Info")
     data object Register : Route("register")
     data object Login : Route("login")
+    data object AdminHome : Route("admin/home")
     data object Dashboard : Route("dashboard")
     data object Courses : Route("courses")
     data object LessonGroups : Route("course/{courseId}/groups")
@@ -29,6 +30,15 @@ sealed class Route(val path: String) {
     data object ExamList   : Route("exams/{courseId}")
     data object ExamGroups : Route("exams/{courseId}/{examId}")
     data object ExamDetail : Route("exam/{courseId}/{examId}/{groupId}/{testId}")
+    data object AdminLessonGroups : Route("admin/course/{courseId}/groups")
+    data object AdminLessons      : Route("admin/lessons/{courseId}/{groupId}")
+    data object AdminLessonDetail : Route("admin/lesson/{courseId}/{groupId}/{lessonId}")
+    data object AdminQuizGroups : Route("admin/quiz/{quizId}/groups")
+    data object AdminQuizzes    : Route("admin/quizzes/{quizId}/{groupId}")
+    data object AdminQuizDetail : Route("admin/quiz/{quizId}/{groupId}/{taskId}")
+    data object AdminExamGroups : Route("admin/exam/{examId}/groups")
+    data object AdminExams      : Route("admin/exams/{examId}/{groupId}")
+    data object AdminExamDetail : Route("admin/exam/{examId}/{groupId}/{testId}")
 }
 
 @Composable
@@ -47,10 +57,26 @@ fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
                 onRegisterSuccess = { nav.navigate("profileSetup") { popUpTo(0) } }
             )
         }
+
         composable(Route.Login.path) {
             LoginScreen(
-                onLoginSuccess = { nav.navigate(Route.Menu.path) { popUpTo(0) } },
+                onLoginSuccess = { isAdmin ->
+                    if (isAdmin) {
+                        nav.navigate(Route.AdminHome.path) { popUpTo(0) }
+                    } else {
+                        nav.navigate(Route.Menu.path) { popUpTo(0) }
+                    }
+                },
                 onGoToRegister = { nav.navigate(Route.Register.path) }
+            )
+        }
+
+        composable(Route.AdminHome.path) {
+            AdminHomeScreen(
+                onOpenLessons = { courseId -> nav.navigate("admin/course/$courseId/groups") },
+                onOpenQuizzes = { quizId -> nav.navigate("admin/quiz/$quizId/groups") },
+                onOpenExams   = { /* nav.navigate("admin/exams") */ },
+                onBackToMenu  = { }
             )
         }
 
@@ -79,7 +105,6 @@ fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
             )
         }
 
-        // Tečajevi
         composable(Route.Courses.path) {
             val user = FirebaseAuth.getInstance().currentUser
             if (user == null) {
@@ -103,7 +128,6 @@ fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
             )
         }
 
-        // GRUPE
         composable("course/{courseId}/groups") { backStack ->
             val courseId = backStack.arguments?.getString("courseId")!!
             LessonGroupsScreen(
@@ -113,7 +137,6 @@ fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
             )
         }
 
-        // LEKCIJE
         composable("lessons/{courseId}/{groupId}") { backStack ->
             val courseId = backStack.arguments?.getString("courseId")!!
             val groupId  = backStack.arguments?.getString("groupId")!!
@@ -127,7 +150,6 @@ fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
             )
         }
 
-        // DETALJ LEKCIJE
         composable(
             route = "lesson/{courseId}/{groupId}/{lessonId}",
             arguments = listOf(
@@ -152,7 +174,44 @@ fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
             )
         }
 
-        // KVIZOVI – 1) popis kvizova
+        composable(Route.AdminLessonGroups.path) { back ->
+            val courseId = back.arguments!!.getString("courseId")!!
+            AdminLessonGroupsScreen(
+                courseId = courseId,
+                onOpenGroupAdmin = { cid, gid ->
+                    nav.navigate("admin/lessons/$cid/$gid")
+                },
+                onBack = { nav.popBackStack() }
+            )
+        }
+
+        composable(Route.AdminLessons.path) { back ->
+            val courseId = back.arguments!!.getString("courseId")!!
+            val groupId  = back.arguments!!.getString("groupId")!!
+            AdminLessonsScreen(
+                courseId = courseId,
+                groupId = groupId,
+                onOpenLessonEdit = { lessonId -> nav.navigate("admin/lesson/$courseId/$groupId/$lessonId") },
+                onBack = { nav.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Route.AdminLessonDetail.path,
+            arguments = listOf(
+                navArgument("courseId"){ type = NavType.StringType },
+                navArgument("groupId"){  type = NavType.StringType },
+                navArgument("lessonId"){ type = NavType.StringType }
+            )
+        ) { back ->
+            AdminLessonDetailScreen(
+                courseId = back.arguments!!.getString("courseId")!!,
+                groupId  = back.arguments!!.getString("groupId")!!,
+                lessonId = back.arguments!!.getString("lessonId")!!,
+                onBack   = { nav.popBackStack() }
+            )
+        }
+
         composable(Route.QuizList.path) { back ->
             val courseId = back.arguments!!.getString("courseId")!!
             QuizListScreen(
@@ -162,7 +221,6 @@ fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
             )
         }
 
-// KVIZOVI – 2) popis grupa u kvizu
         composable(Route.QuizGroups.path) { back ->
             val courseId = back.arguments!!.getString("courseId")!!
             val quizId   = back.arguments!!.getString("quizId")!!
@@ -174,7 +232,6 @@ fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
             )
         }
 
-// KVIZ – 3) detalj (pager)
         composable(
             route = Route.QuizDetail.path,
             arguments = listOf(
@@ -198,7 +255,42 @@ fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
             )
         }
 
-        // 1) popis ispita
+        composable(Route.AdminQuizGroups.path) { back ->
+            val quizId = back.arguments!!.getString("quizId")!!
+            AdminQuizGroupsScreen(
+                quizId = quizId,
+                onOpenGroupAdmin = { qid, gid -> nav.navigate("admin/quizzes/$qid/$gid") },
+                onBack = { nav.popBackStack() }
+            )
+        }
+
+        composable(Route.AdminQuizzes.path) { back ->
+            val quizId  = back.arguments!!.getString("quizId")!!
+            val groupId = back.arguments!!.getString("groupId")!!
+            AdminQuizzesScreen(
+                quizId = quizId,
+                groupId = groupId,
+                onOpenTaskEdit = { taskId -> nav.navigate("admin/quiz/$quizId/$groupId/$taskId") },
+                onBack = { nav.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Route.AdminQuizDetail.path,
+            arguments = listOf(
+                navArgument("quizId"){ type = NavType.StringType },
+                navArgument("groupId"){ type = NavType.StringType },
+                navArgument("taskId"){ type = NavType.StringType }
+            )
+        ) { back ->
+            AdminQuizDetailScreen(
+                quizId  = back.arguments!!.getString("quizId")!!,
+                groupId = back.arguments!!.getString("groupId")!!,
+                taskId  = back.arguments!!.getString("taskId")!!,
+                onBack  = { nav.popBackStack() }
+            )
+        }
+
         composable(Route.ExamList.path) { back ->
             val courseId = back.arguments!!.getString("courseId")!!
             ExamListScreen(
@@ -208,7 +300,6 @@ fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
             )
         }
 
-// 2) grupe u ispitu
         composable(Route.ExamGroups.path) { back ->
             val courseId = back.arguments!!.getString("courseId")!!
             val examId   = back.arguments!!.getString("examId")!!
@@ -220,7 +311,6 @@ fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
             )
         }
 
-// 3) detalj testa (pager)
         composable(
             route = Route.ExamDetail.path,
             arguments = listOf(
@@ -243,6 +333,52 @@ fun ItaloNavGraph(nav: NavHostController = rememberNavController()) {
                 }
             )
         }
+
+        composable(Route.AdminHome.path) {
+            AdminHomeScreen(
+                onOpenLessons = { courseId -> nav.navigate("admin/course/$courseId/groups") },
+                onOpenQuizzes = { quizId   -> nav.navigate("admin/quiz/$quizId/groups") },
+                onOpenExams   = { examId   -> nav.navigate("admin/exam/$examId/groups") }, // <—
+                onBackToMenu  = { }
+            )
+        }
+
+        composable(Route.AdminExamGroups.path) { back ->
+            val examId = back.arguments!!.getString("examId")!!
+            AdminExamGroupsScreen(
+                examId = examId,
+                onOpenGroupAdmin = { eid, gid -> nav.navigate("admin/exams/$eid/$gid") },
+                onBack = { nav.popBackStack() }
+            )
+        }
+
+        composable(Route.AdminExams.path) { back ->
+            val examId  = back.arguments!!.getString("examId")!!
+            val groupId = back.arguments!!.getString("groupId")!!
+            AdminExamsScreen(
+                examId = examId,
+                groupId = groupId,
+                onOpenTestEdit = { testId -> nav.navigate("admin/exam/$examId/$groupId/$testId") },
+                onBack = { nav.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Route.AdminExamDetail.path,
+            arguments = listOf(
+                navArgument("examId"){  type = NavType.StringType },
+                navArgument("groupId"){ type = NavType.StringType },
+                navArgument("testId"){  type = NavType.StringType }
+            )
+        ) { back ->
+            AdminExamDetailScreen(
+                examId  = back.arguments!!.getString("examId")!!,
+                groupId = back.arguments!!.getString("groupId")!!,
+                testId  = back.arguments!!.getString("testId")!!,
+                onBack  = { nav.popBackStack() }
+            )
+        }
+
         // Profil
         composable(Route.Profile.path) {
             ProfileScreen(
