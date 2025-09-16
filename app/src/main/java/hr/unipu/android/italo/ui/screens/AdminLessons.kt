@@ -29,13 +29,14 @@ import androidx.compose.runtime.setValue
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminLessonsScreen(
+    level: String,
     courseId: String,
     groupId: String,
     onOpenLessonEdit: (String) -> Unit,
     onBack: () -> Unit
 ) {
     val vm: LessonsVM = androidx.lifecycle.viewmodel.compose.viewModel(
-        factory = LessonsVM.factory(courseId, groupId)
+        factory = LessonsVM.factory(courseId, groupId, level)
     )
 
     var editingId by remember { mutableStateOf<String?>(null) }
@@ -100,6 +101,7 @@ fun AdminLessonsScreen(
 
             editingId?.let { lid ->
                 EditableLessonDialog(
+                    level = level,
                     courseId = courseId,
                     groupId  = groupId,
                     lessonId = lid,

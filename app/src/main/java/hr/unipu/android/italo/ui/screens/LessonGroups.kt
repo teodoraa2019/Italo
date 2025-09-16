@@ -27,6 +27,7 @@ import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LessonGroupsScreen(
@@ -61,8 +62,20 @@ fun LessonGroupsScreen(
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            TabRow(selectedTabIndex = 0) { Tab(selected = true, onClick = {}, text = { Text(courseTitle) }) }
+            var courseDescription by remember { mutableStateOf("") }
 
+            LaunchedEffect(courseId) {
+                val db = Firebase.firestore
+                //val doc = db.collection("courses_a1").document(courseId).get().await()
+                val userLevel = getUserLevel()
+                val doc = db.collection("courses_$userLevel").document(courseId).get().await()
+
+                courseDescription = doc.getString("description") ?: ""
+            }
+
+            TabRow(selectedTabIndex = 0) {
+                Tab(selected = true, onClick = {}, text = { Text(courseDescription) })
+            }
             when {
                 vm.error != null ->
                     Text("Greška: ${vm.error}", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
@@ -162,10 +175,12 @@ class LessonGroupsVM(private val courseId: String) : ViewModel() {
 
             val found = mutableListOf<LessonGroup>()
             for (name in candidates) {
-                val probe = db.collection("courses_a1").document(courseId)
+                val userLevel = getUserLevel()
+
+                val probe = db.collection("courses_$userLevel").document(courseId)
                     .collection(name).limit(1).get().await()
                 if (!probe.isEmpty) {
-                    val full = db.collection("courses_a1").document(courseId)
+                    val full = db.collection("courses_$userLevel").document(courseId)
                         .collection(name).get().await()
                     val total = full.size()
 
@@ -179,8 +194,8 @@ class LessonGroupsVM(private val courseId: String) : ViewModel() {
                     } else 0
 
                     val pct = if (total > 0) (solved * 100) / total else 0
-                    val idx = found.size + 1                      // ← redni broj grupe
-                    val label = "Lekcija $idx ($total)"           // ← singular
+                    val idx = found.size + 1
+                    val label = "Lekcija $idx ($total)"
 
                     found += LessonGroup(
                         id = name,

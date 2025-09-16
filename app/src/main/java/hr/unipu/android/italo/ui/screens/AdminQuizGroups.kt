@@ -49,14 +49,14 @@ fun AdminQuizGroupsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("DOKUMENTI") },
+                title = { Text(if (quizId.equals("ALL", true)) "KVIZOVI" else "DOKUMENTI") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } }
             )
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             TabRow(selectedTabIndex = 0) {
-                Tab(selected = true, onClick = {}, text = { Text(if (quizId.equals("ALL", true)) "SVE GRUPE" else "DOKUMENTI") })
+                Tab(selected = true, onClick = {}, text = { Text(if (quizId.equals("ALL", true)) "SVI KVIZOVI" else "DOKUMENTI") })
             }
 
             when {

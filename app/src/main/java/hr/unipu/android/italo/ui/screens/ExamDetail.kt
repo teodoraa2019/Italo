@@ -44,7 +44,8 @@ fun ExamDetailScreen(
 
     LaunchedEffect(examId, groupId) {
         val db = Firebase.firestore
-        val col = db.collection("exams_a1").document(examId).collection(groupId)
+        val userLevel = getUserLevel()
+        val col = db.collection("exams_$userLevel").document(examId).collection(groupId)
         val snap = try { col.orderBy("order").get().await() } catch (_: Exception) { col.get().await() }
         items = snap.documents.map {
             ExamItem(
@@ -164,7 +165,6 @@ fun ExamDetailScreen(
                             .collection("progress").document(courseId)
                         val itemRef = courseRef.collection("exams")
                             .document("${examId}__${groupId}__${current.id}")
-                        val statsRef = courseRef.collection("meta").document("exam_stats")
 
                         courseRef.set(mapOf("exists" to true), SetOptions.merge()).await()
                         itemRef.set(
@@ -180,15 +180,6 @@ fun ExamDetailScreen(
                             ),
                             SetOptions.merge()
                         ).await()
-
-                        db.runTransaction { tx ->
-                            val statsSnap = tx.get(statsRef)
-                            val total = (statsSnap.getLong("total") ?: 0L) + 1
-                            var correct = (statsSnap.getLong("correct") ?: 0L)
-                            val alreadyCorrect = (tx.get(itemRef).getBoolean("correct") ?: false)
-                            if (isCorrect && !alreadyCorrect) correct += 1
-                            tx.set(statsRef, mapOf("total" to total, "correct" to correct), SetOptions.merge())
-                        }.await()
                     }
                 },
                 enabled = !locked
@@ -201,7 +192,6 @@ fun ExamDetailScreen(
 
             Spacer(Modifier.weight(1f))
 
-            // Paginacija (ista kao na kvizu)
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                 horizontalArrangement = Arrangement.Center

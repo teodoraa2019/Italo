@@ -28,9 +28,8 @@ data class LessonFS(
     val imageUrl: String = "",
     val order: Int = 0
 )
-
-class CoursesRepoFS {
-    private val courses = Firebase.firestore.collection("courses_a1")
+class CoursesRepoFS(private val userLevel: String) {
+    private val courses = Firebase.firestore.collection("courses_$userLevel")
 
     fun listenCourses(
         onOk: (List<CourseFS>) -> Unit,
@@ -38,14 +37,16 @@ class CoursesRepoFS {
     ): ListenerRegistration =
         courses.orderBy("order").addSnapshotListener { s, e ->
             if (e != null) return@addSnapshotListener onErr(e)
-            onOk(s?.documents?.map {
-                CourseFS(
-                    id = it.id,
-                    title = it.getString("title") ?: "",
-                    description = it.getString("description") ?: "",
-                    level = it.getString("level") ?: ""
-                )
-            }.orEmpty())
+            onOk(
+                s?.documents?.map {
+                    CourseFS(
+                        id = it.id,
+                        title = it.getString("title") ?: "",
+                        description = it.getString("description") ?: "",
+                        level = it.getString("level") ?: ""
+                    )
+                }.orEmpty()
+            )
         }
 
     fun listenLessons(
@@ -58,19 +59,22 @@ class CoursesRepoFS {
             .orderBy("order")
             .addSnapshotListener { s, e ->
                 if (e != null) return@addSnapshotListener onErr(e)
-                onOk(s?.documents?.map { d ->
-                    LessonFS(
-                        id = d.id,
-                        title = d.getString("it") ?: "",
-                        content = d.getString("hr") ?: "",
-                        imageUrl = d.getString("imageUrl") ?: ""
-                    )
-                }.orEmpty())
+                onOk(
+                    s?.documents?.map { d ->
+                        LessonFS(
+                            id = d.id,
+                            title = d.getString("it") ?: "",
+                            content = d.getString("hr") ?: "",
+                            imageUrl = d.getString("imageUrl") ?: ""
+                        )
+                    }.orEmpty()
+                )
             }
 }
 class LessonsVM(
     private val courseId: String,
-    private val groupId: String
+    private val groupId: String,
+    private val userLevel: String? = null
 ) : ViewModel() {
 
     var items by mutableStateOf(listOf<LessonFS>()); private set
@@ -80,41 +84,50 @@ class LessonsVM(
 
     private fun load() = viewModelScope.launch {
         try {
-            val snap = Firebase.firestore
-                .collection("courses_a1").document(courseId)
-                .collection(groupId)
-                .orderBy("order")
-                .get().await()
+            val db = Firebase.firestore
+            val levels = listOf("a1", "a2", "b1", "b2", "c1", "c2")
 
-            items = snap.documents.map { d ->
-                LessonFS(
-                    id = d.id,
-                    title = d.getString("it") ?: "",
-                    content = d.getString("hr") ?: "",
-                    imageUrl = d.getString("imageUrl") ?: ""
+            val snaps = if (userLevel != null) {
+                listOf(
+                    db.collection("courses_$userLevel")
+                        .document(courseId)
+                        .collection(groupId)
+                        .orderBy("order")
+                        .get().await()
                 )
+            } else {
+                levels.mapNotNull { lvl ->
+                    try {
+                        db.collection("courses_$lvl")
+                            .document(courseId)
+                            .collection(groupId)
+                            .orderBy("order")
+                            .get().await()
+                    } catch (_: Exception) { null }
+                }
             }
-        } catch (e: Exception) { error = e.message }
-    }
 
-    private val _locks = mutableStateMapOf<String, Boolean>()
-
-    fun isLocked(lessonId: String): Boolean = _locks[lessonId] == true
-
-    fun lock(lessonId: String) {
-        _locks[lessonId] = true
-    }
-
-    fun clearLocks() {
-        _locks.clear()
+            items = snaps.flatMap { snap ->
+                snap.documents.map { d ->
+                    LessonFS(
+                        id = d.id,
+                        title = d.getString("it") ?: "",
+                        content = d.getString("hr") ?: "",
+                        imageUrl = d.getString("imageUrl") ?: ""
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            error = e.message
+        }
     }
 
     companion object {
-        fun factory(courseId: String, groupId: String): ViewModelProvider.Factory =
+        fun factory(courseId: String, groupId: String, userLevel: String? = null): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return LessonsVM(courseId, groupId) as T
+                    return LessonsVM(courseId, groupId, userLevel) as T
                 }
             }
     }

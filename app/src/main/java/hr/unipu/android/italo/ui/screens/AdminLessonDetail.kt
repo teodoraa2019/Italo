@@ -19,6 +19,7 @@ import kotlinx.coroutines.tasks.await
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminLessonDetailScreen(
+    level: String,
     courseId: String,
     groupId: String,
     lessonId: String,
@@ -36,7 +37,7 @@ fun AdminLessonDetailScreen(
 
     LaunchedEffect(courseId, groupId, lessonId) {
         try {
-            val snap = db.collection("courses_a1").document(courseId)
+            val snap = db.collection("courses_$level").document(courseId)
                 .collection(groupId).document(lessonId).get().await()
             hrText   = snap.getString("hr") ?: ""
             itText   = snap.getString("it") ?: ""
@@ -95,7 +96,7 @@ fun AdminLessonDetailScreen(
                     scope.launch {
                         try {
                             saving = true
-                            val ref = db.collection("courses_a1").document(courseId)
+                            val ref = db.collection("courses_$level").document(courseId)
                                 .collection(groupId).document(lessonId)
 
                             val data = mapOf(
@@ -130,6 +131,7 @@ fun AdminLessonDetailScreen(
 
 @Composable
 fun EditableLessonDialog(
+    level: String,
     courseId: String,
     groupId: String,
     lessonId: String,
@@ -148,7 +150,7 @@ fun EditableLessonDialog(
 
     LaunchedEffect(courseId, groupId, lessonId) {
         try {
-            val snap = db.collection("courses_a1").document(courseId)
+            val snap = db.collection("courses_$level").document(courseId)
                 .collection(groupId).document(lessonId).get().await()
             hrText   = snap.getString("hr") ?: ""
             itText   = snap.getString("it") ?: ""
@@ -192,7 +194,7 @@ fun EditableLessonDialog(
                 scope.launch {
                     saving = true
                     try {
-                        db.collection("courses_a1").document(courseId)
+                        db.collection("courses_$level").document(courseId)
                             .collection(groupId).document(lessonId)
                             .set(
                                 mapOf("hr" to hrText, "it" to itText, "imageUrl" to imageUrl),

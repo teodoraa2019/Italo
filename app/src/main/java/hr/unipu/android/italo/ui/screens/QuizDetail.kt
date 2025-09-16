@@ -1,6 +1,8 @@
 package hr.unipu.android.italo.ui.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -10,10 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.ktx.firestore
@@ -26,6 +26,7 @@ data class QuizItem(
     val id: String,
     val question: String = "",
     val answer: String = "",
+    val options: List<String> = emptyList(),
     val imageUrl: String = ""
 )
 
@@ -44,13 +45,15 @@ fun QuizDetailScreen(
 
     LaunchedEffect(quizId, groupId) {
         val db = Firebase.firestore
-        val col = db.collection("quizzes_a1").document(quizId).collection(groupId)
+        val userLevel = getUserLevel()
+        val col = db.collection("quizzes_$userLevel").document(quizId).collection(groupId)
         val snap = try { col.orderBy("order").get().await() } catch (_: Exception) { col.get().await() }
         items = snap.documents.map {
             QuizItem(
                 id = it.id,
                 question = it.getString("question") ?: "",
                 answer = it.getString("answer") ?: "",
+                options = it.get("options") as? List<String> ?: emptyList(),
                 imageUrl = it.getString("imageUrl") ?: ""
             )
         }
@@ -80,6 +83,7 @@ fun QuizDetailScreen(
     var wasCorrect by remember(current.id) { mutableStateOf<Boolean?>(null) }
     var answer by remember(current.id) { mutableStateOf("") }
     val target = remember(current.id) { current.answer.trim().lowercase() }
+    var selectedOption by remember(current.id) { mutableStateOf<String?>(null) }
 
     LaunchedEffect(courseId, quizId, groupId, current.id) {
         val uid = Firebase.auth.currentUser?.uid ?: return@LaunchedEffect
@@ -92,12 +96,16 @@ fun QuizDetailScreen(
         if (snap.exists()) {
             locked = true
             wasCorrect = snap.getBoolean("correct")
-            answer = snap.getString("answer") ?: ""
+            val savedAnswer = snap.getString("answer") ?: ""
+            answer = savedAnswer
+            selectedOption = savedAnswer
         } else {
             locked = false
             wasCorrect = null
             answer = ""
+            selectedOption = null
         }
+
     }
 
     Scaffold(topBar = {
@@ -107,54 +115,59 @@ fun QuizDetailScreen(
         )
     }) { padding ->
         Column(
-            Modifier.fillMaxSize().padding(padding).padding(20.dp),
+            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             if (current.imageUrl.isNotBlank()) {
                 AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current).data(current.imageUrl).build(),
+                    model = current.imageUrl,
                     contentDescription = current.question,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(180.dp).clip(MaterialTheme.shapes.extraLarge)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .clip(MaterialTheme.shapes.medium),
+                    contentScale = ContentScale.Fit
                 )
             }
 
+
             Text(current.question, style = MaterialTheme.typography.headlineMedium)
 
-            OutlinedTextField(
-                value = answer,
-                onValueChange = { if (!locked) answer = it },
-                enabled = !locked,
-                label = { Text("Upiši odgovor") },
-                singleLine = true,
-                trailingIcon = {
-                    if (wasCorrect != null) {
-                        if (wasCorrect == true) Icon(Icons.Default.Check, null, tint = Color(0xFF2E7D32))
-                        else Icon(Icons.Default.Close, null, tint = Color(0xFFC62828))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                current.options.forEach { option ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(4.dp)
+                    ) {
+                        RadioButton(
+                            selected = selectedOption == option,
+                            onClick = {
+                                if (!locked) {
+                                    selectedOption = option
+                                }
+                            }
+                        )
+                        Text(option, Modifier.padding(start = 8.dp))
+
+                        if (locked) {
+                            if (option == selectedOption && option != current.answer) {
+                                Icon(Icons.Default.Close, contentDescription = "Netočno", tint = Color(0xFFC62828))
+                            }
+                            if (option == current.answer) {
+                                Icon(Icons.Default.Check, contentDescription = "Točno", tint = Color(0xFF2E7D32))
+                            }
+                        }
+
                     }
-                },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor =
-                    if (wasCorrect == true) Color(0xFF2E7D32)
-                    else if (wasCorrect == false) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor =
-                    if (wasCorrect == true) Color(0xFF2E7D32)
-                    else if (wasCorrect == false) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.outline
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
+                }
+            }
 
             Button(
                 onClick = {
                     scope.launch {
-                        val raw = answer
-                        val normalized = raw.trim().lowercase()
-                        if (normalized.isEmpty()) return@launch
-
-                        val isCorrect = normalized == target
+                        val chosen = selectedOption ?: return@launch
+                        val isCorrect = chosen == current.answer
                         wasCorrect = isCorrect
                         locked = true
 
@@ -164,13 +177,12 @@ fun QuizDetailScreen(
                             .collection("progress").document(courseId)
                         val itemRef = courseRef.collection("quizzes")
                             .document("${quizId}__${groupId}__${current.id}")
-                        val statsRef = courseRef.collection("meta").document("quiz_stats")
 
                         courseRef.set(mapOf("exists" to true), SetOptions.merge()).await()
                         itemRef.set(
                             mapOf(
                                 "attempted" to true,
-                                "answer" to raw,
+                                "answer" to chosen,
                                 "correct" to isCorrect,
                                 "quizId" to quizId,
                                 "groupId" to groupId,
@@ -180,18 +192,9 @@ fun QuizDetailScreen(
                             ),
                             SetOptions.merge()
                         ).await()
-
-                        db.runTransaction { tx ->
-                            val statsSnap = tx.get(statsRef)
-                            val total = (statsSnap.getLong("total") ?: 0L) + 1
-                            var correct = (statsSnap.getLong("correct") ?: 0L)
-                            val alreadyCorrect = (tx.get(itemRef).getBoolean("correct") ?: false)
-                            if (isCorrect && !alreadyCorrect) correct += 1
-                            tx.set(statsRef, mapOf("total" to total, "correct" to correct), SetOptions.merge())
-                        }.await()
                     }
                 },
-                enabled = !locked
+                enabled = !locked && selectedOption != null
             ) { Text("Potvrdi") }
 
             if (wasCorrect == false) {
@@ -241,7 +244,7 @@ fun QuizDetailScreen(
                 onClick = {
                     scope.launch {
                         try { markQuizGroupCompleted(courseId, quizId, groupId) } catch (_: Exception) {}
-                        onBackToList()  // vrati se na listu grupa; QuizGroupsScreen će se reloadati i pokazati Restart
+                        onBackToList()
                     }
                 },
                 modifier = Modifier.fillMaxWidth(0.6f)

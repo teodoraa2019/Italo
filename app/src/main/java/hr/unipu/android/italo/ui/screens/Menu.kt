@@ -11,9 +11,9 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -26,7 +26,16 @@ import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.firestore.ktx.firestore
 import kotlinx.coroutines.tasks.await
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+
+
+suspend fun getUserLevel(): String {
+    val uid = Firebase.auth.currentUser?.uid ?: return "a1"
+    val db = Firebase.firestore
+    val snap = db.collection("users").document(uid).get().await()
+    return snap.getString("level") ?: "a1"
+}
 
 private fun starColor(pct: Int): Color {
     val p = pct.coerceIn(0, 100)
@@ -66,7 +75,6 @@ fun MenuScreen(
     onOpenExams: (String) -> Unit,
     onOpenProfile: () -> Unit,
     onLogout: () -> Unit,
-    vm: CoursesVM = viewModel()
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("TEČAJEVI", "PROVJERE ZNANJA")
@@ -75,6 +83,31 @@ fun MenuScreen(
     val photoUrl = user?.photoUrl?.toString()
 
     val uid = Firebase.auth.currentUser?.uid
+    var userLevel by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(uid) {
+        if (uid != null) {
+            val db = Firebase.firestore
+            val snap = db.collection("users").document(uid).get().await()
+            userLevel = snap.getString("level")
+        } else {
+            userLevel = "a1"
+        }
+    }
+
+    if (userLevel == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+
+    val vm: CoursesVM = viewModel(
+        factory = viewModelFactory {
+            initializer { CoursesVM(userLevel!!) }
+        }
+    )
+
     var coursePercents by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -99,10 +132,10 @@ fun MenuScreen(
                 for (i in 1..9) add("lessons_$i")
             }
             for (name in candidates) {
-                val probe = db.collection("courses").document(course.id).collection(name)
+                val probe = db.collection("courses_${userLevel!!}").document(course.id).collection(name)
                     .limit(1).get().await()
                 if (!probe.isEmpty) {
-                    val snap = db.collection("courses").document(course.id).collection(name)
+                    val snap = db.collection("courses_${userLevel!!}").document(course.id).collection(name)
                         .get().await()
                     totalLessons += snap.size()
                 }

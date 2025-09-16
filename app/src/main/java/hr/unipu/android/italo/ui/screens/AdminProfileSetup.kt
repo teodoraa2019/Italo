@@ -24,7 +24,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 @Composable
-fun UserProfileSetupScreen(
+fun AdminProfileSetupScreen(
     onDone: () -> Unit,
     onSkip: () -> Unit,
     vm: ProfileViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
@@ -106,7 +106,7 @@ fun UserProfileSetupScreen(
     }
 }
 
-class ProfileViewModel : ViewModel() {
+class AdminProfileViewModel : ViewModel() {
     private val auth = Firebase.auth
     private val db = Firebase.firestore
     private val storage = Firebase.storage

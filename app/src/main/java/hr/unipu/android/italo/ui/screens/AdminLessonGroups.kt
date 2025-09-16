@@ -37,10 +37,11 @@ private fun colorForCourse(courseId: String): Color {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminLessonGroupsScreen(
+    level: String,
     courseId: String,
-    onOpenGroupAdmin: (courseId: String, groupId: String) -> Unit,
+    onOpenGroupAdmin: (level: String, courseId: String, groupId: String) -> Unit,
     onBack: () -> Unit,
-    vm: AdminLessonGroupsVM = viewModel(factory = AdminLessonGroupsVM.factory(courseId))
+    vm: AdminLessonGroupsVM = viewModel(factory = AdminLessonGroupsVM.factory(level, courseId))
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -52,14 +53,14 @@ fun AdminLessonGroupsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("DOKUMENTI") },
+                title = { Text(if (courseId.equals("ALL", true)) "LEKCIJE" else "DOKUMENTI") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } }
             )
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             TabRow(selectedTabIndex = 0) {
-                Tab(selected = true, onClick = {}, text = { Text(if (courseId.equals("ALL", true)) "SVE GRUPE" else "DOKUMENTI") })
+                Tab(selected = true, onClick = {}, text = { Text(if (courseId.equals("ALL", true)) "SVE LEKCIJE" else "DOKUMENTI") })
             }
 
             when {
@@ -89,7 +90,7 @@ fun AdminLessonGroupsScreen(
                             modifier = Modifier
                                 .padding(horizontal = 12.dp, vertical = 6.dp)
                                 .clip(MaterialTheme.shapes.medium)
-                                .clickable { onOpenGroupAdmin(g.courseId, g.id) }
+                                .clickable { onOpenGroupAdmin(level, g.courseId, g.id) }
                         )
                     }
                 }
@@ -99,6 +100,7 @@ fun AdminLessonGroupsScreen(
 }
 
 data class AdminLessonGroup(
+    val level: String,
     val courseId: String,
     val courseLabel: String,
     val id: String,
@@ -107,7 +109,7 @@ data class AdminLessonGroup(
     val orderInCourse: Int? = null
 )
 
-class AdminLessonGroupsVM(private val courseId: String) : ViewModel() {
+class AdminLessonGroupsVM(private val levelFilter: String?, private val courseId: String) : ViewModel() {
     var groups by mutableStateOf(listOf<AdminLessonGroup>()); private set
     var loading by mutableStateOf(true); private set
     var error by mutableStateOf<String?>(null); private set
@@ -127,32 +129,40 @@ class AdminLessonGroupsVM(private val courseId: String) : ViewModel() {
     private fun load() = viewModelScope.launch {
         loading = true
         try {
-            val db = Firebase.firestore
-            val coursesToCheck = if (courseId.equals("ALL", true))
-                db.collection("courses_a1").get().await().documents.map { it.id }
-            else listOf(courseId)
+            val levels = if (levelFilter == null || levelFilter.equals("ALL", true)) {
+                listOf("a1", "a2")
+            } else {
+                listOf(levelFilter)
+            }
 
             val out = mutableListOf<AdminLessonGroup>()
-            for (cid in coursesToCheck) {
-                val metaA1Snap = db.collection("courses_a1").document(cid).get().await()
-                val metaA1 = metaA1Snap.data
-                val fallbackMeta = runCatching { db.collection("courses").document(cid).get().await().data }.getOrNull()
-                val courseLabel = labelForCourse(metaA1, fallbackMeta, cid)
-                val courseOrder = (metaA1Snap.getLong("order") ?: (fallbackMeta?.get("order") as? Number))?.toInt()
+            val db = Firebase.firestore
 
-                for (i in 1..20) {
-                    val gname = "lessons_group_$i"
-                    val probe = db.collection("courses_a1").document(cid).collection(gname).limit(1).get().await()
-                    if (probe.isEmpty) continue
-                    val total = db.collection("courses_a1").document(cid).collection(gname).get().await().size()
-                    out += AdminLessonGroup(
-                        courseId = cid,
-                        courseLabel = courseLabel,
-                        id = gname,
-                        label = "Lekcija $i ($total)",
-                        count = total,
-                        orderInCourse = courseOrder
-                    )
+            for (level in levels) {
+                val courses = db.collection("courses_$level").get().await()
+                for (c in courses.documents) {
+                    val courseId = c.id
+                    val courseLabel = c.getString("description") ?: c.getString("title") ?: courseId
+                    val courseOrder = c.getLong("order")?.toInt()
+
+                    for (i in 1..20) {
+                        val gname = "lessons_group_$i"
+                        val probe = db.collection("courses_$level").document(courseId)
+                            .collection(gname).limit(1).get().await()
+                        if (!probe.isEmpty) {
+                            val total = db.collection("courses_$level").document(courseId)
+                                .collection(gname).get().await().size()
+                            out += AdminLessonGroup(
+                                level = level,
+                                courseId = courseId,
+                                courseLabel = "[$level] $courseLabel",
+                                id = gname,
+                                label = "Lekcija $i ($total)",
+                                count = total,
+                                orderInCourse = courseOrder
+                            )
+                        }
+                    }
                 }
             }
 
@@ -161,6 +171,7 @@ class AdminLessonGroupsVM(private val courseId: String) : ViewModel() {
                     .thenBy { it.courseLabel.lowercase() }
                     .thenBy { groupIndex(it.id) }
             )
+
         } catch (e: Exception) {
             error = e.message
         } finally {
@@ -169,11 +180,11 @@ class AdminLessonGroupsVM(private val courseId: String) : ViewModel() {
     }
 
     companion object {
-        fun factory(courseId: String): ViewModelProvider.Factory =
+        fun factory(level: String?, courseId: String): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return AdminLessonGroupsVM(courseId) as T
+                    return AdminLessonGroupsVM(level, courseId) as T
                 }
             }
     }

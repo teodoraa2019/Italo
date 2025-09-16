@@ -37,7 +37,7 @@ data class QuizGroup(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuizGroupsScreen(
-    courseId: String,         // zbog napretka
+    courseId: String,
     quizId: String,
     onOpenGroup: (String) -> Unit,
     onBack: () -> Unit,
@@ -52,9 +52,18 @@ fun QuizGroupsScreen(
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
+            var quizDescription by remember { mutableStateOf("") }
+
+            LaunchedEffect(quizId) {
+                val db = Firebase.firestore
+                val userLevel = getUserLevel()
+                val doc = db.collection("quizzes_$userLevel").document(quizId).get().await()
+
+                quizDescription = doc.getString("description") ?: ""
+            }
+
             TabRow(selectedTabIndex = 0) {
-                val num = quizId.substringAfter("quiz_", missingDelimiterValue = "").ifBlank { "?" }
-                Tab(selected = true, onClick = {}, text = { Text("KVIZ $num") })
+                Tab(selected = true, onClick = {}, text = { Text(quizDescription) })
             }
 
             when {
@@ -121,7 +130,6 @@ class QuizGroupsVM(private val courseId: String, private val quizId: String) : V
             val progress = db.collection("users").document(uid)
                 .collection("progress").document(courseId)
 
-            // izbriši pokušaje u toj grupi
             val toDelete = progress.collection("quizzes")
                 .whereEqualTo("quizId", quizId)
                 .whereEqualTo("groupId", groupId)
@@ -139,7 +147,6 @@ class QuizGroupsVM(private val courseId: String, private val quizId: String) : V
             val db = Firebase.firestore
             val uid = Firebase.auth.currentUser?.uid
 
-            // completed set (pohranjeno kao kombinacija kviz+grupa)
             val completedSet: Set<String> = if (uid != null) {
                 val progress = db.collection("users").document(uid)
                     .collection("progress").document(courseId).get().await()
@@ -149,9 +156,11 @@ class QuizGroupsVM(private val courseId: String, private val quizId: String) : V
             val found = mutableListOf<QuizGroup>()
             for (i in 1..30) {
                 val groupId = "quizzes_group_$i"
-                val probe = db.collection("quizzes_a1").document(quizId).collection(groupId).limit(1).get().await()
+                val userLevel = getUserLevel()
+                val probe = db.collection("quizzes_$userLevel").document(quizId).collection(groupId).limit(1).get().await()
+
                 if (!probe.isEmpty) {
-                    val total = db.collection("quizzes_a1").document(quizId).collection(groupId).get().await().size()
+                    val total = db.collection("quizzes_$userLevel").document(quizId).collection(groupId).get().await().size()
 
                     val solved = if (uid != null) {
                         db.collection("users").document(uid)

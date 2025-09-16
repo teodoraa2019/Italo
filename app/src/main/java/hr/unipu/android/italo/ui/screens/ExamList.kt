@@ -19,7 +19,7 @@ import kotlinx.coroutines.tasks.await
 
 private data class ExamMeta(
     val id: String,
-    val title: String // description ili fallback "Ispit N"
+    val title: String
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -40,10 +40,10 @@ fun ExamListScreen(
             val db = Firebase.firestore
             val found = mutableListOf<ExamMeta>()
 
-            // 1) pronađi ispite i povuci description
             for (i in 1..30) {
                 val eid = "exam_$i"
-                val doc = db.collection("exams_a1").document(eid).get().await()
+                val userLevel = getUserLevel()
+                val doc = db.collection("exams_$userLevel").document(eid).get().await()
                 if (doc.exists()) {
                     val title = doc.getString("description") ?: "Ispit $i"
                     found += ExamMeta(eid, title)
@@ -51,7 +51,6 @@ fun ExamListScreen(
             }
             items = found
 
-            // 2) izračun postotaka po ispitima
             val uid = Firebase.auth.currentUser?.uid
             if (uid != null && found.isNotEmpty()) {
                 val out = mutableMapOf<String, Int>()
@@ -105,7 +104,7 @@ fun ExamListScreen(
                             leadingContent = { FilledStar(percent = pct, size = 24.dp) },
                             headlineContent = {
                                 Column {
-                                    Text(e.title) // description
+                                    Text(e.title)
                                     if (pct > 0) Text(
                                         "$pct%",
                                         color = Color(0xFF4CAF50),

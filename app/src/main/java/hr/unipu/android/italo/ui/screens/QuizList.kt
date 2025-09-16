@@ -19,7 +19,7 @@ import kotlinx.coroutines.tasks.await
 
 private data class QuizMeta(
     val id: String,
-    val title: String // description ili fallback "Kviz N"
+    val title: String
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -33,17 +33,42 @@ fun QuizListScreen(
     var percents by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    var userLevel by remember { mutableStateOf<String?>(null) }
 
+    // prvo dohvatimo user level
     LaunchedEffect(Unit) {
+        loading = true; error = null
+        try {
+            val uid = Firebase.auth.currentUser?.uid
+            if (uid == null) {
+                error = "Nisi prijavljen"; return@LaunchedEffect
+            }
+            val db = Firebase.firestore
+            val snap = db.collection("users").document(uid).get().await()
+            userLevel = snap.getString("level") ?: "a1"
+        } catch (e: Exception) {
+            error = e.message
+        }
+    }
+
+    // ako level još nije učitan
+    if (userLevel == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+
+    // sad dohvaćamo kvizove za taj level
+    LaunchedEffect(userLevel) {
         loading = true; error = null
         try {
             val db = Firebase.firestore
             val found = mutableListOf<QuizMeta>()
 
-            // 1) Pronađi postojeće kvizove i povuci description
             for (i in 1..30) {
                 val qid = "quiz_$i"
-                val doc = db.collection("quizzes_a1").document(qid).get().await()
+                val doc = db.collection("quizzes_$userLevel").document(qid).get().await()
                 if (doc.exists()) {
                     val title = doc.getString("description") ?: "Kviz $i"
                     found += QuizMeta(qid, title)
@@ -51,7 +76,6 @@ fun QuizListScreen(
             }
             items = found
 
-            // 2) Izračun postotaka po kvizu (sve grupe + svi taskovi)
             val uid = Firebase.auth.currentUser?.uid
             if (uid != null && found.isNotEmpty()) {
                 val out = mutableMapOf<String, Int>()
@@ -59,10 +83,10 @@ fun QuizListScreen(
                     var total = 0
                     for (g in 1..30) {
                         val gid = "quizzes_group_$g"
-                        val probe = db.collection("quizzes_a1").document(q.id)
+                        val probe = db.collection("quizzes_$userLevel").document(q.id)
                             .collection(gid).limit(1).get().await()
                         if (!probe.isEmpty) {
-                            total += db.collection("quizzes_a1").document(q.id)
+                            total += db.collection("quizzes_$userLevel").document(q.id)
                                 .collection(gid).get().await().size()
                         }
                     }
@@ -108,7 +132,7 @@ fun QuizListScreen(
                             leadingContent = { FilledStar(percent = pct, size = 24.dp) },
                             headlineContent = {
                                 Column {
-                                    Text(q.title) // ← prikaz descriptiona
+                                    Text(q.title)
                                     if (pct > 0) Text(
                                         "$pct%",
                                         color = Color(0xFF4CAF50),

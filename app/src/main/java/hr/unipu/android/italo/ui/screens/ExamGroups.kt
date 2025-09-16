@@ -50,10 +50,19 @@ fun ExamGroupsScreen(
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            TabRow(selectedTabIndex = 0) {
-                val num = examId.substringAfter("exam_", missingDelimiterValue = "").ifBlank { "?" }
-                Tab(selected = true, onClick = {}, text = { Text("ISPIT $num") })
+            var examDescription by remember { mutableStateOf("") }
+
+            LaunchedEffect(examId) {
+                val db = Firebase.firestore
+                val userLevel = getUserLevel()
+                val doc = db.collection("exams_$userLevel").document(examId).get().await()
+                examDescription = doc.getString("description") ?: ""
             }
+
+            TabRow(selectedTabIndex = 0) {
+                Tab(selected = true, onClick = {}, text = { Text(examDescription) })
+            }
+
 
             when {
                 vm.error != null ->
@@ -117,7 +126,6 @@ class ExamGroupsVM(private val courseId: String, private val examId: String) : V
             val progress = db.collection("users").document(uid)
                 .collection("progress").document(courseId)
 
-            // obriši pokušaje u toj grupi
             val toDelete = progress.collection("exams")
                 .whereEqualTo("examId", examId)
                 .whereEqualTo("groupId", groupId)
@@ -144,9 +152,11 @@ class ExamGroupsVM(private val courseId: String, private val examId: String) : V
             val found = mutableListOf<ExamGroup>()
             for (i in 1..30) {
                 val groupId = "exams_group_$i"
-                val probe = db.collection("exams_a1").document(examId).collection(groupId).limit(1).get().await()
+                val userLevel = getUserLevel()
+                val probe = db.collection("exams_$userLevel").document(examId).collection(groupId).limit(1).get().await()
+
                 if (!probe.isEmpty) {
-                    val total = db.collection("exams_a1").document(examId).collection(groupId).get().await().size()
+                    val total = db.collection("exams_$userLevel").document(examId).collection(groupId).get().await().size()
 
                     val solved = if (uid != null) {
                         db.collection("users").document(uid)
@@ -162,7 +172,7 @@ class ExamGroupsVM(private val courseId: String, private val examId: String) : V
                     val idx = found.size + 1
                     found += ExamGroup(
                         id = groupId,
-                        label = "Testovi $idx ($total)",
+                        label = "Zadaci $idx ($total)",
                         count = total,
                         percent = pct,
                         completed = "${examId}::${groupId}" in completedSet

@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -27,9 +28,11 @@ fun AdminQuizDetailScreen(
     val db = Firebase.firestore
     val scope = rememberCoroutineScope()
 
-    var hrText by remember { mutableStateOf("") }
-    var itText by remember { mutableStateOf("") }
+    var question by remember { mutableStateOf("") }
+    var answer by remember { mutableStateOf("") }
+    var optionsText by remember { mutableStateOf("") }
     var imageUrl by remember { mutableStateOf("") }
+
     var loading by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
     var msg by remember { mutableStateOf<String?>(null) }
@@ -38,14 +41,13 @@ fun AdminQuizDetailScreen(
         try {
             val snap = db.collection("quizzes_a1").document(quizId)
                 .collection(groupId).document(taskId).get().await()
-            hrText   = snap.getString("question") ?: ""
-            itText   = snap.getString("answer") ?: ""
-            imageUrl = snap.getString("imageUrl") ?: ""
+            question   = snap.getString("question") ?: ""
+            answer     = snap.getString("answer") ?: ""
+            optionsText = (snap.get("options") as? List<String>)?.joinToString(", ") ?: ""
+            imageUrl   = snap.getString("imageUrl") ?: ""
         } catch (e: Exception) {
-            msg = "Greška pri učitavanju: ${e.message}"
-        } finally {
-            loading = false
-        }
+            msg = "Greška: ${e.message}"
+        } finally { loading = false }
     }
 
     Scaffold(
@@ -57,7 +59,7 @@ fun AdminQuizDetailScreen(
         }
     ) { p ->
         if (loading) {
-            Box(Modifier.fillMaxSize().padding(p), contentAlignment = androidx.compose.ui.Alignment.Center) {
+            Box(Modifier.fillMaxSize().padding(p), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
             return@Scaffold
@@ -68,18 +70,22 @@ fun AdminQuizDetailScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             OutlinedTextField(
-                value = itText, onValueChange = { itText = it },
-                label = { Text("Naslov (it)") }, singleLine = true, modifier = Modifier.fillMaxWidth()
+                value = question, onValueChange = { question = it },
+                label = { Text("Pitanje (question)") }, modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
-                value = hrText, onValueChange = { hrText = it },
-                label = { Text("Sadržaj (hr)") }, minLines = 3, modifier = Modifier.fillMaxWidth()
+                value = answer, onValueChange = { answer = it },
+                label = { Text("Točan odgovor (answer)") }, singleLine = true, modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
-                value = imageUrl, onValueChange = { imageUrl = it },
-                label = { Text("URL slike") }, singleLine = true, modifier = Modifier.fillMaxWidth()
+                value = optionsText, onValueChange = { optionsText = it },
+                label = { Text("Opcije (odvojene zarezom)") }, modifier = Modifier.fillMaxWidth()
             )
 
+            OutlinedTextField(
+                value = imageUrl, onValueChange = { imageUrl = it },
+                label = { Text("URL slike (opcionalno)") }, singleLine = true, modifier = Modifier.fillMaxWidth()
+            )
             if (imageUrl.isNotBlank()) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current).data(imageUrl).crossfade(true).build(),
@@ -87,8 +93,6 @@ fun AdminQuizDetailScreen(
                     modifier = Modifier.fillMaxWidth().height(180.dp)
                 )
             }
-
-            Spacer(Modifier.height(8.dp))
 
             Button(
                 onClick = {
@@ -98,18 +102,20 @@ fun AdminQuizDetailScreen(
                             val ref = db.collection("quizzes_a1").document(quizId)
                                 .collection(groupId).document(taskId)
 
+                            val optionsList = optionsText
+                                .split(",").map { it.trim() }.filter { it.isNotEmpty() }
+
                             val data = mapOf(
-                                "question" to hrText,
-                                "answer" to itText,
+                                "question" to question,
+                                "answer" to answer,
+                                "options" to optionsList,
                                 "imageUrl" to imageUrl
                             )
                             ref.set(data, SetOptions.merge()).await()
-                            msg = "Spremljeno."
+                            msg = "✅ Spremljeno."
                         } catch (e: Exception) {
-                            msg = "Greška pri spremanju: ${e.message}"
-                        } finally {
-                            saving = false
-                        }
+                            msg = "❌ Greška: ${e.message}"
+                        } finally { saving = false }
                     }
                 },
                 enabled = !saving,
@@ -119,7 +125,7 @@ fun AdminQuizDetailScreen(
             msg?.let {
                 Text(
                     it,
-                    color = if (it.startsWith("Greška")) MaterialTheme.colorScheme.error
+                    color = if (it.startsWith("❌")) MaterialTheme.colorScheme.error
                     else MaterialTheme.colorScheme.primary
                 )
             }
@@ -139,19 +145,22 @@ fun EditableTaskDialog(
     val scope = rememberCoroutineScope()
 
     var question by remember { mutableStateOf("") }
-    var answer   by remember { mutableStateOf("") }
+    var answer by remember { mutableStateOf("") }
+    var optionsText by remember { mutableStateOf("") }
     var imageUrl by remember { mutableStateOf("") }
-    var loading  by remember { mutableStateOf(true) }
-    var saving   by remember { mutableStateOf(false) }
-    var msg      by remember { mutableStateOf<String?>(null) }
+
+    var loading by remember { mutableStateOf(true) }
+    var saving by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(quizId, groupId, taskId) {
         try {
             val snap = db.collection("quizzes_a1").document(quizId)
                 .collection(groupId).document(taskId).get().await()
-            question = snap.getString("question") ?: ""
-            answer   = snap.getString("answer") ?: ""
-            imageUrl = snap.getString("imageUrl") ?: ""
+            question   = snap.getString("question") ?: ""
+            answer     = snap.getString("answer") ?: ""
+            optionsText = (snap.get("options") as? List<String>)?.joinToString(", ") ?: ""
+            imageUrl   = snap.getString("imageUrl") ?: ""
         } finally { loading = false }
     }
 
@@ -165,15 +174,19 @@ fun EditableTaskDialog(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = question, onValueChange = { question = it },
-                        label = { Text("Pitanje (question)") }, singleLine = false
+                        label = { Text("Pitanje (question)") }
                     )
                     OutlinedTextField(
                         value = answer, onValueChange = { answer = it },
                         label = { Text("Odgovor (answer)") }, singleLine = true
                     )
                     OutlinedTextField(
+                        value = optionsText, onValueChange = { optionsText = it },
+                        label = { Text("Opcije (odvojene zarezom)") }
+                    )
+                    OutlinedTextField(
                         value = imageUrl, onValueChange = { imageUrl = it },
-                        label = { Text("URL slike") }, singleLine = true
+                        label = { Text("URL slike (opcionalno)") }, singleLine = true
                     )
                     if (imageUrl.isNotBlank()) {
                         AsyncImage(
@@ -190,6 +203,7 @@ fun EditableTaskDialog(
             TextButton(enabled = !saving && !loading, onClick = {
                 scope.launch {
                     saving = true
+                    val optionsList = optionsText.split(",").map { it.trim() }.filter { it.isNotEmpty() }
                     try {
                         Firebase.firestore.collection("quizzes_a1").document(quizId)
                             .collection(groupId).document(taskId)
@@ -197,12 +211,12 @@ fun EditableTaskDialog(
                                 mapOf(
                                     "question" to question,
                                     "answer" to answer,
+                                    "options" to optionsList,
                                     "imageUrl" to imageUrl
                                 ),
                                 SetOptions.merge()
                             ).await()
-                        onSaved()
-                        onDismiss()
+                        onSaved(); onDismiss()
                     } catch (e: Exception) {
                         msg = "Greška: ${e.message}"
                     } finally { saving = false }
@@ -214,4 +228,3 @@ fun EditableTaskDialog(
         }
     )
 }
-

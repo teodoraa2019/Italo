@@ -15,8 +15,11 @@ fun FaqScreen(onBack: () -> Unit) {
     val faqs = listOf(
         "Kako funkcioniraju lekcije?" to "Lekcije su kratke jedinice s kvizom na kraju.",
         "Trebam li internet?" to "Za većinu sadržaja da; preuzimanje izvanmrežno planirano.",
-        "Kako promijeniti profilnu sliku?" to "Profil → Uredi profil → Odaberi sliku."
-    )
+        "Kako promijeniti profilnu sliku?" to "Profil → Uredi profil → Odaberi sliku → Spremi.",
+        "Kako se računa napredak?" to "Postotak = točni odgovori / ukupno (posebno za lekcije, kvizove i ispite).",
+        "Mogu li ponovno pokrenuti ispit?" to "Da — u popisu odaberi ispit i pritisni 'Restart'; briše statistiku te provjere znanja.",
+        "Kako prijaviti grešku ili dati prijedlog?" to "Otvori ekran Info i pošalji poruku na istaknutu e-mail adresu.",
+        )
     Scaffold(topBar = {
         TopAppBar(
             title = { Text("Često postavljana pitanja") },

@@ -41,34 +41,57 @@ fun AdminExamGroupsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (examId.equals("ALL", true)) "SVE GRUPE ISPITA" else "DOKUMENTI") },
+                title = { Text(if (examId.equals("ALL", true)) "PROVJERE ZNANJA" else "DOKUMENTI") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } }
             )
         }
     ) { p ->
-        when {
-            vm.error != null ->
-                Text("Greška: ${vm.error}", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
-            vm.groups.isEmpty() && !vm.loading ->
-                Text("Nema pronađenih grupa ispita.", modifier = Modifier.padding(16.dp))
-            else -> LazyColumn(Modifier.padding(p)) {
-                items(vm.groups, key = { "${it.examId}:${it.id}" }) { g ->
-                    val accent = colorForExam(g.examId)
-                    val onAccent = if (accent.luminance() > 0.5f) Color.Black else Color.White
-                    Card(
-                        onClick = { onOpenGroupAdmin(g.examId, g.id) },
-                        colors = CardDefaults.cardColors(containerColor = accent),
-                        shape = MaterialTheme.shapes.large,
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                        modifier = Modifier
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                            .fillMaxWidth()
-                    ) {
-                        ListItem(
-                            headlineContent = { Text("${g.examLabel} • ${g.label}") },
-                            trailingContent = { Icon(Icons.Filled.ChevronRight, null, tint = onAccent) },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent, headlineColor = onAccent)
-                        )
+        Column(Modifier.fillMaxSize().padding(p)) {
+            TabRow(selectedTabIndex = 0) {
+                Tab(
+                    selected = true,
+                    onClick = {},
+                    text = { Text(if (examId.equals("ALL", true)) "SVE PROVJERE ZNANJA" else "DOKUMENTI") })
+            }
+            when {
+                vm.error != null ->
+                    Text(
+                        "Greška: ${vm.error}",
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(16.dp)
+                    )
+
+                vm.groups.isEmpty() && !vm.loading ->
+                    Text("Nema pronađenih grupa ispita.", modifier = Modifier.padding(16.dp))
+
+                else -> LazyColumn(Modifier.padding(p)) {
+                    items(vm.groups, key = { "${it.examId}:${it.id}" }) { g ->
+                        val accent = colorForExam(g.examId)
+                        val onAccent = if (accent.luminance() > 0.5f) Color.Black else Color.White
+                        Card(
+                            onClick = { onOpenGroupAdmin(g.examId, g.id) },
+                            colors = CardDefaults.cardColors(containerColor = accent),
+                            shape = MaterialTheme.shapes.large,
+                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                            modifier = Modifier
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                .fillMaxWidth()
+                        ) {
+                            ListItem(
+                                headlineContent = { Text("${g.examLabel} • ${g.label}") },
+                                trailingContent = {
+                                    Icon(
+                                        Icons.Filled.ChevronRight,
+                                        null,
+                                        tint = onAccent
+                                    )
+                                },
+                                colors = ListItemDefaults.colors(
+                                    containerColor = Color.Transparent,
+                                    headlineColor = onAccent
+                                )
+                            )
+                        }
                     }
                 }
             }

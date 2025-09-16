@@ -44,8 +44,11 @@ fun InfoScreen(onBack: () -> Unit, onFaq: () -> Unit) {
             Text("Kako započeti:", style = MaterialTheme.typography.titleMedium)
             Text("1) Registriraj se ili se prijavi.")
             Text("2) Odaberi razinu i otvori lekcije.")
-            Text("3) Rješavaj kvizove i prati napredak u profilu.")
+            Text("3) Rješavaj kvizove i testove te prati napredak u profilu.")
             Text("Savjet: Uči kratko, ali redovito – aplikacija pamti gdje si stao/la.")
+
+
+            Text("Kontakt: info@italo.com", style = MaterialTheme.typography.titleMedium)
 
             Text(
                 "Za dodatna pitanja i savjete pogledaj često postavljana pitanja.",

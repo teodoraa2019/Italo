@@ -153,7 +153,6 @@ fun LessonDetailScreen(
                             .collection("progress").document(courseId)
                         val lessonRef = courseRef.collection("lessons")
                             .document("${groupId}__${lessonId}")
-                        val statsRef = courseRef.collection("meta").document("stats")
 
                         courseRef.set(mapOf("exists" to true), SetOptions.merge()).await()
                         lessonRef.set(
@@ -166,15 +165,6 @@ fun LessonDetailScreen(
                             ),
                             SetOptions.merge()
                         ).await()
-
-                        db.runTransaction { tx ->
-                            val statsSnap = tx.get(statsRef)
-                            val total = (statsSnap.getLong("total") ?: 0L) + 1
-                            var correct = (statsSnap.getLong("correct") ?: 0L)
-                            val alreadyCorrect = (tx.get(lessonRef).getBoolean("correct") ?: false)
-                            if (isCorrect && !alreadyCorrect) correct += 1
-                            tx.set(statsRef, mapOf("total" to total, "correct" to correct), SetOptions.merge())
-                        }.await()
                     }
                 },
                 enabled = !locked
