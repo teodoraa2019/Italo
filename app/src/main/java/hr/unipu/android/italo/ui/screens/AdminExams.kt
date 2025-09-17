@@ -86,6 +86,29 @@ fun AdminExamsScreen(
     }) { p ->
         Column(Modifier.fillMaxSize().padding(p)) {
             Text("Testovi (uređivanje)", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(16.dp))
+            var addingNew by remember { mutableStateOf(false) }
+
+            Button(
+                onClick = { addingNew = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            ) {
+                Text("Dodaj novi zadatak")
+            }
+
+            if (addingNew) {
+                EditableExamTestDialog(
+                    examId = examId,
+                    groupId = groupId,
+                    testId = null, // null znači novi
+                    onDismiss = { addingNew = false },
+                    onSaved = {
+                        addingNew = false
+                    }
+                )
+            }
+
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
                 contentPadding = PaddingValues(12.dp),
@@ -127,4 +150,26 @@ fun AdminExamsScreen(
             vm.error?.let { Text("Greška: $it", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(12.dp)) }
         }
     }
+}
+
+suspend fun generateNextTestIdAndOrder(
+    examId: String,
+    groupId: String
+): Pair<String, Int> {
+    val db = Firebase.firestore
+    val testsRef = db.collection("exams_a1")
+        .document(examId)
+        .collection(groupId)
+
+    val snapshot = testsRef.get().await()
+
+    val maxOrder = snapshot.documents
+        .mapNotNull { it.getLong("order")?.toInt() }
+        .maxOrNull() ?: 0
+
+    val maxIdNum = snapshot.documents.mapNotNull {
+        it.id.removePrefix("test_").toIntOrNull()
+    }.maxOrNull() ?: 0
+
+    return Pair("test_${maxIdNum + 1}", maxOrder + 1)
 }

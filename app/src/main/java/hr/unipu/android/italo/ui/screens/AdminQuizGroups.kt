@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -39,6 +40,7 @@ fun AdminQuizGroupsScreen(
     onBack: () -> Unit,
     vm: AdminQuizGroupsVM = viewModel(factory = AdminQuizGroupsVM.factory(quizId))
 ) {
+    var deletingId by remember { mutableStateOf<String?>(null) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) vm.reload() }
@@ -58,6 +60,28 @@ fun AdminQuizGroupsScreen(
             TabRow(selectedTabIndex = 0) {
                 Tab(selected = true, onClick = {}, text = { Text(if (quizId.equals("ALL", true)) "SVI KVIZOVI" else "DOKUMENTI") })
             }
+
+            var showAddDialog by remember { mutableStateOf(false) }
+
+            Button(
+                onClick = { showAddDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp)
+            ) {
+                Text("Dodaj novi kviz")
+            }
+
+            if (showAddDialog) {
+                AddQuizDialog(
+                    onDismiss = { showAddDialog = false },
+                    onConfirm = { title, description ->
+                        vm.addQuiz(title, description)
+                        showAddDialog = false
+                    }
+                )
+            }
+
 
             when {
                 vm.error != null ->
@@ -81,7 +105,33 @@ fun AdminQuizGroupsScreen(
                             ListItem(
                                 headlineContent = { Text("${g.quizLabel} • ${g.label}") },
                                 trailingContent = {
-                                    Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = onAccent)
+                                    Row {
+                                        IconButton(onClick = {
+                                            deletingId = g.quizId
+                                            vm.deleteQuiz(g.quizId) { deletingId = null }
+                                        }) {
+                                            if (deletingId == g.quizId) {
+                                                CircularProgressIndicator(
+                                                    strokeWidth = 2.dp,
+                                                    modifier = Modifier.size(20.dp),
+                                                    color = MaterialTheme.colorScheme.error
+                                                )
+                                            } else {
+                                                Icon(
+                                                    imageVector = Icons.Default.Delete,
+                                                    contentDescription = "Obriši kviz",
+                                                    tint = MaterialTheme.colorScheme.error
+                                                )
+                                            }
+                                        }
+                                        IconButton(onClick = { onOpenGroupAdmin(g.quizId, g.id) }) {
+                                            Icon(
+                                                Icons.Filled.ChevronRight,
+                                                contentDescription = "Otvori",
+                                                tint = onAccent
+                                            )
+                                        }
+                                    }
                                 },
                                 colors = ListItemDefaults.colors(
                                     containerColor = Color.Transparent,
@@ -115,6 +165,49 @@ class AdminQuizGroupsVM(private val quizId: String) : ViewModel() {
 
     init { load() }
     fun reload() = load()
+
+    fun addQuiz(title: String, description: String) = viewModelScope.launch {
+        try {
+            val db = Firebase.firestore
+            val quizzesRef = db.collection("quizzes_a1")
+
+            val snapshot = quizzesRef.get().await()
+
+            val maxOrder = snapshot.documents
+                .mapNotNull { it.getLong("order")?.toInt() }
+                .maxOrNull() ?: 0
+
+            val maxIdNum = snapshot.documents.mapNotNull {
+                it.id.removePrefix("quiz_").toIntOrNull()
+            }.maxOrNull() ?: 0
+
+            val nextOrder = maxOrder + 1
+            val nextId = "quiz_${maxIdNum + 1}"
+
+            val data = mapOf(
+                "title" to title,
+                "description" to description,
+                "order" to nextOrder
+            )
+
+            quizzesRef.document(nextId).set(data).await()
+            reload()
+        } catch (e: Exception) {
+            error = e.message
+        }
+    }
+
+    fun deleteQuiz(quizId: String, onDone: () -> Unit) = viewModelScope.launch {
+        try {
+            val db = Firebase.firestore
+            db.collection("quizzes_a1").document(quizId).delete().await()
+            reload()
+        } catch (e: Exception) {
+            error = e.message
+        } finally {
+            onDone()
+        }
+    }
 
     private fun groupIndex(name: String): Int =
         name.substringAfter("quizzes_group_", "").toIntOrNull() ?: Int.MAX_VALUE
@@ -172,3 +265,44 @@ class AdminQuizGroupsVM(private val quizId: String) : ViewModel() {
             }
     }
 }
+
+@Composable
+fun AddQuizDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String, String) -> Unit
+) {
+    var title by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(title, description) },
+                enabled = title.isNotBlank()
+            ) { Text("Spremi") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Odustani") }
+        },
+        title = { Text("Novi kviz") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Naziv kviza") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Opis kviza") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    )
+}
+

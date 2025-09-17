@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -43,6 +44,8 @@ fun AdminLessonGroupsScreen(
     onBack: () -> Unit,
     vm: AdminLessonGroupsVM = viewModel(factory = AdminLessonGroupsVM.factory(level, courseId))
 ) {
+    var deletingId by remember { mutableStateOf<String?>(null) }
+
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) vm.reload() }
@@ -53,14 +56,34 @@ fun AdminLessonGroupsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (courseId.equals("ALL", true)) "LEKCIJE" else "DOKUMENTI") },
+                title = { Text(if (courseId.equals("ALL", true)) "LEKCIJE" else "LEKCIJE") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } }
             )
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             TabRow(selectedTabIndex = 0) {
-                Tab(selected = true, onClick = {}, text = { Text(if (courseId.equals("ALL", true)) "SVE LEKCIJE" else "DOKUMENTI") })
+                Tab(selected = true, onClick = {}, text = { Text(if (courseId.equals("ALL", true)) "SVE LEKCIJE" else "SVE LEKCIJE") })
+            }
+            var showAddDialog by remember { mutableStateOf(false) }
+
+            Button(
+                onClick = { showAddDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp)
+            ) {
+                Text("Dodaj novi tečaj")
+            }
+
+            if (showAddDialog) {
+                AddCourseDialog(
+                    onDismiss = { showAddDialog = false },
+                    onConfirm = { title, description ->
+                        vm.addCourse(title, description)
+                        showAddDialog = false
+                    }
+                )
             }
 
             when {
@@ -78,7 +101,34 @@ fun AdminLessonGroupsScreen(
                                 Text("${g.courseLabel} • ${g.label}")
                             },
                             trailingContent = {
-                                Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = onAccent)
+                                Row {
+                                    IconButton(onClick = {
+                                        deletingId = g.courseId
+                                        vm.deleteCourse(g.courseId) { deletingId = null }
+                                    }) {
+                                        if (deletingId == g.courseId) {
+                                            CircularProgressIndicator(
+                                                strokeWidth = 2.dp,
+                                                modifier = Modifier.size(20.dp),
+                                                color = MaterialTheme.colorScheme.error
+                                            )
+                                        } else {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = "Obriši kviz",
+                                                tint = MaterialTheme.colorScheme.error
+                                            )
+                                        }
+                                    }
+
+                                    IconButton(onClick = { onOpenGroupAdmin(level, g.courseId, g.id) }) {
+                                        Icon(
+                                            Icons.Filled.ChevronRight,
+                                            contentDescription = "Otvori",
+                                            tint = onAccent
+                                        )
+                                    }
+                                }
                             },
                             colors = ListItemDefaults.colors(
                                 containerColor = accent,
@@ -117,6 +167,38 @@ class AdminLessonGroupsVM(private val levelFilter: String?, private val courseId
     init { load() }
     fun reload() = load()
 
+    fun addCourse(title: String, description: String) = viewModelScope.launch {
+        try {
+            val db = Firebase.firestore
+            val coursesRef = db.collection("courses_a1")
+
+            val snapshot = coursesRef.get().await()
+
+            val maxOrder = snapshot.documents
+                .mapNotNull { it.getLong("order")?.toInt() }
+                .maxOrNull() ?: 0
+
+            val maxIdNum = snapshot.documents.mapNotNull {
+                it.id.removePrefix("course_").toIntOrNull()
+            }.maxOrNull() ?: 0
+
+            val nextOrder = maxOrder + 1
+            val nextId = "course_${maxIdNum + 1}"
+
+            val data = mapOf(
+                "title" to title,
+                "description" to description,
+                "order" to nextOrder
+            )
+
+            coursesRef.document(nextId).set(data).await()
+            reload()
+        } catch (e: Exception) {
+            error = e.message
+        }
+    }
+
+
     private fun groupIndex(name: String): Int =
         name.substringAfter("lessons_group_", "").toIntOrNull() ?: Int.MAX_VALUE
 
@@ -124,6 +206,18 @@ class AdminLessonGroupsVM(private val levelFilter: String?, private val courseId
         fun s(m: Map<String, Any?>?, k: String) = (m?.get(k) as? String)?.takeIf { it.isNotBlank() }
         return s(metaA1, "description") ?: s(metaA1, "title")
         ?: s(fallbackMeta, "description") ?: s(fallbackMeta, "title") ?: cid
+    }
+
+    fun deleteCourse(courseId: String, onDone: () -> Unit) = viewModelScope.launch {
+        try {
+            val db = Firebase.firestore
+            db.collection("courses_a1").document(courseId).delete().await()
+            reload()
+        } catch (e: Exception) {
+            error = e.message
+        } finally {
+            onDone()
+        }
     }
 
     private fun load() = viewModelScope.launch {
@@ -145,7 +239,7 @@ class AdminLessonGroupsVM(private val levelFilter: String?, private val courseId
                     val courseLabel = c.getString("description") ?: c.getString("title") ?: courseId
                     val courseOrder = c.getLong("order")?.toInt()
 
-                    for (i in 1..20) {
+                    for (i in 1..50) {
                         val gname = "lessons_group_$i"
                         val probe = db.collection("courses_$level").document(courseId)
                             .collection(gname).limit(1).get().await()
@@ -188,4 +282,44 @@ class AdminLessonGroupsVM(private val levelFilter: String?, private val courseId
                 }
             }
     }
+}
+
+@Composable
+fun AddCourseDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String, String) -> Unit
+) {
+    var title by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(title, description) },
+                enabled = title.isNotBlank()
+            ) { Text("Spremi") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Odustani") }
+        },
+        title = { Text("Novi tečaj") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Naziv tečaja") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Opis tečaja") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    )
 }

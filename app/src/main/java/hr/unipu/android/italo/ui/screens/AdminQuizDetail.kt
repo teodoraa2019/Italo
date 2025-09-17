@@ -132,12 +132,11 @@ fun AdminQuizDetailScreen(
         }
     }
 }
-
 @Composable
 fun EditableTaskDialog(
     quizId: String,
     groupId: String,
-    taskId: String,
+    taskId: String?,   // može biti null za novi zadatak
     onDismiss: () -> Unit,
     onSaved: () -> Unit
 ) {
@@ -154,14 +153,18 @@ fun EditableTaskDialog(
     var msg by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(quizId, groupId, taskId) {
-        try {
-            val snap = db.collection("quizzes_a1").document(quizId)
-                .collection(groupId).document(taskId).get().await()
-            question   = snap.getString("question") ?: ""
-            answer     = snap.getString("answer") ?: ""
-            optionsText = (snap.get("options") as? List<String>)?.joinToString(", ") ?: ""
-            imageUrl   = snap.getString("imageUrl") ?: ""
-        } finally { loading = false }
+        if (taskId != null) {
+            try {
+                val snap = db.collection("quizzes_a1").document(quizId)
+                    .collection(groupId).document(taskId).get().await()
+                question   = snap.getString("question") ?: ""
+                answer     = snap.getString("answer") ?: ""
+                optionsText = (snap.get("options") as? List<String>)?.joinToString(", ") ?: ""
+                imageUrl   = snap.getString("imageUrl") ?: ""
+            } finally { loading = false }
+        } else {
+            loading = false
+        }
     }
 
     AlertDialog(
@@ -174,19 +177,19 @@ fun EditableTaskDialog(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = question, onValueChange = { question = it },
-                        label = { Text("Pitanje (question)") }
+                        label = { Text("Pitanje") }
                     )
                     OutlinedTextField(
                         value = answer, onValueChange = { answer = it },
-                        label = { Text("Odgovor (answer)") }, singleLine = true
+                        label = { Text("Točan odgovor") }, singleLine = true
                     )
                     OutlinedTextField(
                         value = optionsText, onValueChange = { optionsText = it },
-                        label = { Text("Opcije (odvojene zarezom)") }
+                        label = { Text("Opcije (zarezom odvojene)") }
                     )
                     OutlinedTextField(
                         value = imageUrl, onValueChange = { imageUrl = it },
-                        label = { Text("URL slike (opcionalno)") }, singleLine = true
+                        label = { Text("URL slike") }, singleLine = true
                     )
                     if (imageUrl.isNotBlank()) {
                         AsyncImage(
@@ -205,17 +208,32 @@ fun EditableTaskDialog(
                     saving = true
                     val optionsList = optionsText.split(",").map { it.trim() }.filter { it.isNotEmpty() }
                     try {
-                        Firebase.firestore.collection("quizzes_a1").document(quizId)
-                            .collection(groupId).document(taskId)
-                            .set(
-                                mapOf(
-                                    "question" to question,
-                                    "answer" to answer,
-                                    "options" to optionsList,
-                                    "imageUrl" to imageUrl
-                                ),
-                                SetOptions.merge()
-                            ).await()
+                        if (taskId == null) {
+                            // Novi zadatak
+                            val (newId, newOrder) = generateNextTaskIdAndOrder(quizId, groupId)
+                            val data = mapOf(
+                                "question" to question,
+                                "answer" to answer,
+                                "options" to optionsList,
+                                "imageUrl" to imageUrl,
+                                "order" to newOrder
+                            )
+                            db.collection("quizzes_a1").document(quizId)
+                                .collection(groupId).document(newId).set(data).await()
+                        } else {
+                            // Update postojećeg
+                            db.collection("quizzes_a1").document(quizId)
+                                .collection(groupId).document(taskId)
+                                .set(
+                                    mapOf(
+                                        "question" to question,
+                                        "answer" to answer,
+                                        "options" to optionsList,
+                                        "imageUrl" to imageUrl
+                                    ),
+                                    SetOptions.merge()
+                                ).await()
+                        }
                         onSaved(); onDismiss()
                     } catch (e: Exception) {
                         msg = "Greška: ${e.message}"
@@ -224,7 +242,33 @@ fun EditableTaskDialog(
             }) { Text(if (saving) "Spremam..." else "Spremi") }
         },
         dismissButton = {
-            TextButton(enabled = !saving, onClick = onDismiss) { Text("Odustani") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(enabled = !saving, onClick = onDismiss) {
+                    Text("Odustani")
+                }
+
+                if (taskId != null) {
+                    TextButton(
+                        enabled = !saving,
+                        onClick = {
+                            scope.launch {
+                                try {
+                                    saving = true
+                                    db.collection("quizzes_a1").document(quizId)
+                                        .collection(groupId).document(taskId)
+                                        .delete().await()
+                                    msg = "Zadatak obrisan."
+                                    onSaved(); onDismiss()
+                                } catch (e: Exception) {
+                                    msg = "Greška pri brisanju: ${e.message}"
+                                } finally { saving = false }
+                            }
+                        }
+                    ) {
+                        Text("Obriši", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
         }
     )
 }

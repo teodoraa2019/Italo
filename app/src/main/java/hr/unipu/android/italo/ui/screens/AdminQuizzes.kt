@@ -91,12 +91,35 @@ fun AdminQuizzesScreen(
 
     Scaffold(topBar = {
         TopAppBar(
-            title = { Text("DOKUMENTI") },
+            title = { Text("KVIZOVI") },
             navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } }
         )
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             Text("Zadaci (uređivanje)", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(16.dp))
+            var addingNew by remember { mutableStateOf(false) }
+
+            Button(
+                onClick = { addingNew = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            ) {
+                Text("Dodaj novi zadatak")
+            }
+            Spacer(Modifier.height(8.dp))
+
+            if (addingNew) {
+                EditableTaskDialog(
+                    quizId = quizId,
+                    groupId = groupId,
+                    taskId = null,   // novi zadatak
+                    onDismiss = { addingNew = false },
+                    onSaved = { addingNew = false }
+                )
+            }
+
+
             Spacer(Modifier.height(8.dp))
 
             LazyVerticalGrid(
@@ -161,4 +184,26 @@ fun AdminQuizzesScreen(
             vm.error?.let { Text("Greška: $it", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(12.dp)) }
         }
     }
+}
+
+suspend fun generateNextTaskIdAndOrder(
+    quizId: String,
+    groupId: String
+): Pair<String, Int> {
+    val db = Firebase.firestore
+    val tasksRef = db.collection("quizzes_a1")
+        .document(quizId)
+        .collection(groupId)
+
+    val snapshot = tasksRef.get().await()
+
+    val maxOrder = snapshot.documents
+        .mapNotNull { it.getLong("order")?.toInt() }
+        .maxOrNull() ?: 0
+
+    val maxIdNum = snapshot.documents.mapNotNull {
+        it.id.removePrefix("task_").toIntOrNull()
+    }.maxOrNull() ?: 0
+
+    return Pair("task_${maxIdNum + 1}", maxOrder + 1)
 }

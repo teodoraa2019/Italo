@@ -25,6 +25,9 @@ import coil.request.ImageRequest
 import hr.unipu.android.italo.data.LessonsVM
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import com.google.firebase.Firebase
+import com.google.firebase.firestore.firestore
+import kotlinx.coroutines.tasks.await
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,12 +46,23 @@ fun AdminLessonsScreen(
 
     Scaffold(topBar = {
         TopAppBar(
-            title = { Text("DOKUMENTI") },
+            title = { Text("LEKCIJE") },
             navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } }
         )
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             Text("Lekcije (uređivanje)", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(16.dp))
+            var addingNew by remember { mutableStateOf(false) }
+
+            Button(
+                onClick = { addingNew = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            ) {
+                Text("Dodaj novu lekciju")
+            }
+
             Spacer(Modifier.height(8.dp))
 
             LazyVerticalGrid(
@@ -110,9 +124,42 @@ fun AdminLessonsScreen(
                 )
             }
 
+            if (addingNew) {
+                EditableLessonDialog(
+                    level = level,
+                    courseId = courseId,
+                    groupId = groupId,
+                    lessonId = null,
+                    onDismiss = { addingNew = false },
+                    onSaved = { addingNew = false }
+                )
+
+            }
 
             vm.error?.let { Text("Greška: $it", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(12.dp)) }
         }
     }
 }
 
+suspend fun generateNextLessonIdAndOrder(
+    level: String,
+    courseId: String,
+    groupId: String
+): Pair<String, Int> {
+    val db = Firebase.firestore
+    val lessonsRef = db.collection("courses_$level")
+        .document(courseId)
+        .collection(groupId)
+
+    val snapshot = lessonsRef.get().await()
+
+    val maxOrder = snapshot.documents
+        .mapNotNull { it.getLong("order")?.toInt() }
+        .maxOrNull() ?: 0
+
+    val maxIdNum = snapshot.documents.mapNotNull {
+        it.id.removePrefix("lesson_").toIntOrNull()
+    }.maxOrNull() ?: 0
+
+    return Pair("lesson_${maxIdNum + 1}", maxOrder + 1)
+}

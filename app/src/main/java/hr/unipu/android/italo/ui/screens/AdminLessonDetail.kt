@@ -128,13 +128,12 @@ fun AdminLessonDetailScreen(
     }
 }
 
-
 @Composable
 fun EditableLessonDialog(
     level: String,
     courseId: String,
     groupId: String,
-    lessonId: String,
+    lessonId: String?,
     onDismiss: () -> Unit,
     onSaved: () -> Unit = {}
 ) {
@@ -149,13 +148,17 @@ fun EditableLessonDialog(
     var msg by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(courseId, groupId, lessonId) {
-        try {
-            val snap = db.collection("courses_$level").document(courseId)
-                .collection(groupId).document(lessonId).get().await()
-            hrText   = snap.getString("hr") ?: ""
-            itText   = snap.getString("it") ?: ""
-            imageUrl = snap.getString("imageUrl") ?: ""
-        } finally { loading = false }
+        if (lessonId != null) {
+            try {
+                val snap = db.collection("courses_$level").document(courseId)
+                    .collection(groupId).document(lessonId).get().await()
+                hrText   = snap.getString("hr") ?: ""
+                itText   = snap.getString("it") ?: ""
+                imageUrl = snap.getString("imageUrl") ?: ""
+            } finally { loading = false }
+        } else {
+            loading = false
+        }
     }
 
     AlertDialog(
@@ -194,23 +197,71 @@ fun EditableLessonDialog(
                 scope.launch {
                     saving = true
                     try {
-                        db.collection("courses_$level").document(courseId)
-                            .collection(groupId).document(lessonId)
-                            .set(
-                                mapOf("hr" to hrText, "it" to itText, "imageUrl" to imageUrl),
-                                SetOptions.merge()
-                            ).await()
+                        if (lessonId == null) {
+                            val (newId, newOrder) = generateNextLessonIdAndOrder(level, courseId, groupId)
+
+                            val data = mapOf(
+                                "hr" to hrText,
+                                "it" to itText,
+                                "imageUrl" to imageUrl,
+                                "order" to newOrder
+                            )
+
+                            db.collection("courses_$level").document(courseId)
+                                .collection(groupId).document(newId)
+                                .set(data).await()
+                        } else {
+                            db.collection("courses_$level").document(courseId)
+                                .collection(groupId).document(lessonId)
+                                .set(
+                                    mapOf("hr" to hrText, "it" to itText, "imageUrl" to imageUrl),
+                                    SetOptions.merge()
+                                ).await()
+                        }
+
                         onSaved()
                         onDismiss()
                     } catch (e: Exception) {
                         msg = "Greška: ${e.message}"
                     } finally { saving = false }
+
                 }
             }) { Text(if (saving) "Spremam..." else "Spremi") }
         },
         dismissButton = {
-            TextButton(enabled = !saving, onClick = onDismiss) { Text("Odustani") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(enabled = !saving, onClick = onDismiss) {
+                    Text("Odustani")
+                }
+
+                if (lessonId != null) {
+                    TextButton(
+                        enabled = !saving,
+                        onClick = {
+                            scope.launch {
+                                try {
+                                    saving = true
+                                    db.collection("courses_$level").document(courseId)
+                                        .collection(groupId).document(lessonId)
+                                        .delete().await()
+
+                                    msg = "Lekcija obrisana."
+                                    onSaved()
+                                    onDismiss()
+                                } catch (e: Exception) {
+                                    msg = "Greška pri brisanju: ${e.message}"
+                                } finally {
+                                    saving = false
+                                }
+                            }
+                        }
+                    ) {
+                        Text("Obriši", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
         }
+
     )
 }
 

@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlin.math.abs
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.material.icons.filled.Delete
 
 private val ExamPalette = listOf(
     Color(0xFFEF5350), Color(0xFFAB47BC), Color(0xFF5C6BC0),
@@ -45,6 +46,7 @@ fun AdminExamGroupsScreen(
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } }
             )
         }
+
     ) { p ->
         Column(Modifier.fillMaxSize().padding(p)) {
             TabRow(selectedTabIndex = 0) {
@@ -53,6 +55,28 @@ fun AdminExamGroupsScreen(
                     onClick = {},
                     text = { Text(if (examId.equals("ALL", true)) "SVE PROVJERE ZNANJA" else "DOKUMENTI") })
             }
+
+            var showAddDialog by remember { mutableStateOf(false) }
+
+            Button(
+                onClick = { showAddDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp)
+            ) {
+                Text("Dodaj novi ispit")
+            }
+
+            if (showAddDialog) {
+                AddExamDialog(
+                    onDismiss = { showAddDialog = false },
+                    onConfirm = { title, description ->
+                        vm.addExam(title, description)
+                        showAddDialog = false
+                    }
+                )
+            }
+
             when {
                 vm.error != null ->
                     Text(
@@ -64,7 +88,7 @@ fun AdminExamGroupsScreen(
                 vm.groups.isEmpty() && !vm.loading ->
                     Text("Nema pronađenih grupa ispita.", modifier = Modifier.padding(16.dp))
 
-                else -> LazyColumn(Modifier.padding(p)) {
+                else -> LazyColumn(contentPadding = PaddingValues(bottom = 12.dp)) {
                     items(vm.groups, key = { "${it.examId}:${it.id}" }) { g ->
                         val accent = colorForExam(g.examId)
                         val onAccent = if (accent.luminance() > 0.5f) Color.Black else Color.White
@@ -80,11 +104,20 @@ fun AdminExamGroupsScreen(
                             ListItem(
                                 headlineContent = { Text("${g.examLabel} • ${g.label}") },
                                 trailingContent = {
-                                    Icon(
-                                        Icons.Filled.ChevronRight,
-                                        null,
-                                        tint = onAccent
-                                    )
+                                    Row {
+                                        IconButton(onClick = { vm.deleteExam(g.examId) }) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = "Obriši",
+                                                tint = MaterialTheme.colorScheme.error
+                                            )
+                                        }
+                                        Icon(
+                                            Icons.Filled.ChevronRight,
+                                            contentDescription = null,
+                                            tint = onAccent
+                                        )
+                                    }
                                 },
                                 colors = ListItemDefaults.colors(
                                     containerColor = Color.Transparent,
@@ -118,6 +151,43 @@ class AdminExamGroupsVM(private val examId: String) : ViewModel() {
 
     private fun groupIndex(name: String): Int =
         name.substringAfter("exams_group_", "").toIntOrNull() ?: Int.MAX_VALUE
+
+    fun addExam(title: String, description: String) = viewModelScope.launch {
+        try {
+            val db = Firebase.firestore
+            val examsRef = db.collection("exams_a1")
+
+            val snapshot = examsRef.get().await()
+            val maxOrder = snapshot.documents.mapNotNull { it.getLong("order")?.toInt() }.maxOrNull() ?: 0
+            val maxIdNum = snapshot.documents.mapNotNull {
+                it.id.removePrefix("exam_").toIntOrNull()
+            }.maxOrNull() ?: 0
+
+            val nextOrder = maxOrder + 1
+            val nextId = "exam_${maxIdNum + 1}"
+
+            val data = mapOf(
+                "title" to title,
+                "description" to description,
+                "order" to nextOrder
+            )
+
+            examsRef.document(nextId).set(data).await()
+            reload()
+        } catch (e: Exception) {
+            error = e.message
+        }
+    }
+
+    fun deleteExam(examId: String) = viewModelScope.launch {
+        try {
+            val db = Firebase.firestore
+            db.collection("exams_a1").document(examId).delete().await()
+            reload()
+        } catch (e: Exception) {
+            error = e.message
+        }
+    }
 
     private fun load() = viewModelScope.launch {
         loading = true
@@ -165,4 +235,44 @@ class AdminExamGroupsVM(private val examId: String) : ViewModel() {
                 }
             }
     }
+}
+
+@Composable
+fun AddExamDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String, String) -> Unit
+) {
+    var title by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(title, description) },
+                enabled = title.isNotBlank()
+            ) { Text("Spremi") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Odustani") }
+        },
+        title = { Text("Novi ispit") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Naziv ispita") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Opis ispita") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    )
 }

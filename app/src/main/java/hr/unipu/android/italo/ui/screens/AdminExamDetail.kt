@@ -92,12 +92,11 @@ fun AdminExamDetailScreen(
         }
     }
 }
-
 @Composable
 fun EditableExamTestDialog(
     examId: String,
     groupId: String,
-    testId: String,
+    testId: String?,   // može biti null za novi test
     onDismiss: () -> Unit,
     onSaved: () -> Unit
 ) {
@@ -112,13 +111,17 @@ fun EditableExamTestDialog(
     var msg      by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(examId, groupId, testId) {
-        try {
-            val snap = db.collection("exams_a1").document(examId)
-                .collection(groupId).document(testId).get().await()
-            question = snap.getString("question") ?: ""
-            answer   = snap.getString("answer") ?: ""
-            imageUrl = snap.getString("imageUrl") ?: ""
-        } finally { loading = false }
+        if (testId != null) {
+            try {
+                val snap = db.collection("exams_a1").document(examId)
+                    .collection(groupId).document(testId).get().await()
+                question = snap.getString("question") ?: ""
+                answer   = snap.getString("answer") ?: ""
+                imageUrl = snap.getString("imageUrl") ?: ""
+            } finally { loading = false }
+        } else {
+            loading = false
+        }
     }
 
     AlertDialog(
@@ -126,12 +129,20 @@ fun EditableExamTestDialog(
         title = { Text("Uredi test") },
         text = {
             if (loading) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                LinearProgressIndicator(Modifier.fillMaxWidth())
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(value = question, onValueChange = { question = it }, label = { Text("Pitanje (question)") })
-                    OutlinedTextField(value = answer,   onValueChange = { answer = it },   label = { Text("Odgovor (answer)") }, singleLine = true)
+                    OutlinedTextField(value = question, onValueChange = { question = it }, label = { Text("Pitanje") })
+                    OutlinedTextField(value = answer,   onValueChange = { answer = it },   label = { Text("Odgovor") }, singleLine = true)
                     OutlinedTextField(value = imageUrl, onValueChange = { imageUrl = it }, label = { Text("URL slike") }, singleLine = true)
+
+                    if (imageUrl.isNotBlank()) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current).data(imageUrl).crossfade(true).build(),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxWidth().height(140.dp)
+                        )
+                    }
                     msg?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
                 }
             }
@@ -141,17 +152,54 @@ fun EditableExamTestDialog(
                 scope.launch {
                     saving = true
                     try {
-                        Firebase.firestore.collection("exams_a1").document(examId)
-                            .collection(groupId).document(testId)
-                            .set(mapOf("question" to question, "answer" to answer, "imageUrl" to imageUrl), SetOptions.merge())
-                            .await()
+                        if (testId == null) {
+                            // Novi test
+                            val (newId, newOrder) = generateNextTestIdAndOrder(examId, groupId)
+                            val data = mapOf(
+                                "question" to question,
+                                "answer" to answer,
+                                "imageUrl" to imageUrl,
+                                "order" to newOrder
+                            )
+                            db.collection("exams_a1").document(examId)
+                                .collection(groupId).document(newId).set(data).await()
+                        } else {
+                            // Update postojećeg
+                            db.collection("exams_a1").document(examId)
+                                .collection(groupId).document(testId)
+                                .set(mapOf("question" to question, "answer" to answer, "imageUrl" to imageUrl), SetOptions.merge())
+                                .await()
+                        }
                         onSaved(); onDismiss()
                     } catch (e: Exception) { msg = "Greška: ${e.message}" }
                     finally { saving = false }
                 }
             }) { Text(if (saving) "Spremam..." else "Spremi") }
         },
-        dismissButton = { TextButton(enabled = !saving, onClick = onDismiss) { Text("Odustani") } }
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(enabled = !saving, onClick = onDismiss) { Text("Odustani") }
+
+                if (testId != null) {
+                    TextButton(
+                        enabled = !saving,
+                        onClick = {
+                            scope.launch {
+                                try {
+                                    saving = true
+                                    db.collection("exams_a1").document(examId)
+                                        .collection(groupId).document(testId)
+                                        .delete().await()
+                                    msg = "Test obrisan."
+                                    onSaved(); onDismiss()
+                                } catch (e: Exception) {
+                                    msg = "Greška pri brisanju: ${e.message}"
+                                } finally { saving = false }
+                            }
+                        }
+                    ) { Text("Obriši", color = MaterialTheme.colorScheme.error) }
+                }
+            }
+        }
     )
 }
-
