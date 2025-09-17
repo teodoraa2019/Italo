@@ -22,6 +22,7 @@ import com.google.firebase.ktx.Firebase
 import com.google.firebase.storage.ktx.storage
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import androidx.compose.ui.platform.LocalFocusManager
 
 @Composable
 fun UserProfileSetupScreen(
@@ -57,6 +58,36 @@ fun UserProfileSetupScreen(
                 label = { Text("Korisničko ime") },
                 modifier = Modifier.fillMaxWidth()
             )
+
+            Spacer(Modifier.height(12.dp))
+
+            var newPassword by remember { mutableStateOf(TextFieldValue("")) }
+
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = newPassword,
+                onValueChange = { newPassword = it },
+                label = { Text("Nova lozinka") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            val focusManager = LocalFocusManager.current
+            var passwordChanged by remember { mutableStateOf(false) }
+
+            Button(
+                onClick = {
+                    vm.changePassword(newPassword.text.trim())
+                    passwordChanged = true
+                    focusManager.clearFocus() // makni fokus iz TextFielda
+                },
+                enabled = newPassword.text.length >= 6 && !loading && !passwordChanged,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(if (passwordChanged) "Lozinka promijenjena" else "Promijeni lozinku")
+            }
 
             Spacer(Modifier.height(12.dp))
 
@@ -152,6 +183,25 @@ class ProfileViewModel : ViewModel() {
         }
     }
 
+    fun changePassword(newPassword: String) {
+        val user = auth.currentUser ?: run {
+            error.value = "Niste prijavljeni."
+            return
+        }
+        loading.value = true
+        error.value = null
+
+        viewModelScope.launch {
+            try {
+                user.updatePassword(newPassword).await()
+                loading.value = false
+            } catch (e: Exception) {
+                loading.value = false
+                error.value = e.message ?: "Greška pri promjeni lozinke."
+            }
+        }
+    }
+
     private suspend fun updateAll(name: String, photoUrl: String?, onDone: () -> Unit) {
         val user = auth.currentUser ?: return
         val req = userProfileChangeRequest {
@@ -185,3 +235,5 @@ class ProfileViewModel : ViewModel() {
         }
     }
 }
+
+
