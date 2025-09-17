@@ -2,6 +2,8 @@ package hr.unipu.android.italo.ui.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
@@ -81,7 +83,6 @@ fun AllUsersScreen(onBack: () -> Unit) {
         }
     }
 }
-
 @Composable
 private fun UserDetailsDialog(user: AppUser, onClose: () -> Unit) {
     val db = Firebase.firestore
@@ -93,6 +94,7 @@ private fun UserDetailsDialog(user: AppUser, onClose: () -> Unit) {
     var photoUrl by remember { mutableStateOf("") }
     var role by remember { mutableStateOf("") }
     var level by remember { mutableStateOf("") }
+    var active by remember { mutableStateOf(true) }
     var lessons by remember { mutableStateOf(AdminStat(0, 0)) }
     var quizzes by remember { mutableStateOf(AdminStat(0, 0)) }
     var exams by remember { mutableStateOf(AdminStat(0, 0)) }
@@ -105,6 +107,7 @@ private fun UserDetailsDialog(user: AppUser, onClose: () -> Unit) {
             photoUrl   = doc.getString("photoUrl").orEmpty()
             role       = doc.getString("role").orEmpty()
             level      = doc.getString("level").orEmpty()
+            active     = doc.getBoolean("active") ?: true
 
             var lC = 0; var lT = 0
             var qC = 0; var qT = 0
@@ -136,7 +139,12 @@ private fun UserDetailsDialog(user: AppUser, onClose: () -> Unit) {
             if (loading) {
                 LinearProgressIndicator(Modifier.fillMaxWidth())
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 500.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
                     if (photoUrl.isNotBlank()) {
                         AsyncImage(
                             model = photoUrl,
@@ -149,6 +157,7 @@ private fun UserDetailsDialog(user: AppUser, onClose: () -> Unit) {
                     Text("UID: ${user.uid}")
                     if (role.isNotBlank()) Text("Uloga: $role")
                     if (level.isNotBlank()) Text("Razina: $level")
+                    Text("Aktivan: $active")
 
                     Spacer(Modifier.height(8.dp))
                     Text("Napredak", style = MaterialTheme.typography.titleSmall)
@@ -162,14 +171,54 @@ private fun UserDetailsDialog(user: AppUser, onClose: () -> Unit) {
 
                     val scope = rememberCoroutineScope()
                     var opMsg by remember { mutableStateOf<String?>(null) }
+
                     OutlinedButton(onClick = {
                         scope.launch {
                             opMsg = null
                             runCatching { resetUserProgressQuick(user.uid) }
-                                .onSuccess { opMsg = "Progres resetiran." }
-                                .onFailure { opMsg = "Greška: ${it.message}" }
+                                .onSuccess { opMsg = "✅ Progres resetiran." }
+                                .onFailure { opMsg = "❌ Greška: ${it.message}" }
                         }
-                    }) { Text("Obriši progres") }
+                    }) { Text("Poništi napredak korisnika") }
+
+                    OutlinedButton(onClick = {
+                        scope.launch {
+                            opMsg = null
+                            runCatching {
+                                db.collection("users").document(user.uid)
+                                    .update("role", if (role == "admin") "user" else "admin").await()
+                                role = if (role == "admin") "user" else "admin"
+                            }.onSuccess { opMsg = "✅ Uloga promijenjena: $role" }
+                                .onFailure { opMsg = "❌ Greška: ${it.message}" }
+                        }
+                    }) { Text("Promijeni ulogu") }
+
+                    OutlinedButton(onClick = {
+                        scope.launch {
+                            opMsg = null
+                            runCatching {
+                                val newLevel = if (level == "a1") "a2" else "a1"
+                                db.collection("users").document(user.uid)
+                                    .update("level", newLevel).await()
+                                level = newLevel
+                            }.onSuccess { opMsg = "✅ Razina promijenjena: $level" }
+                                .onFailure { opMsg = "❌ Greška: ${it.message}" }
+                        }
+                    }) { Text("Promijeni razinu") }
+
+                    OutlinedButton(onClick = {
+                        scope.launch {
+                            opMsg = null
+                            runCatching {
+                                val newActive = !active
+                                db.collection("users").document(user.uid)
+                                    .update("active", newActive).await()
+                                active = newActive
+                            }.onSuccess { opMsg = if (active) "✅ Korisnik odblokiran." else "⛔ Korisnik blokiran." }
+                                .onFailure { opMsg = "❌ Greška: ${it.message}" }
+                        }
+                    }) { Text(if (active) "Blokiraj korisnika" else "Odblokiraj korisnika") }
+
                     opMsg?.let { Text(it) }
                 }
             }
